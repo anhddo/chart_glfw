@@ -29,8 +29,8 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 
 // settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+const unsigned int SCR_WIDTH = 2560;
+const unsigned int SCR_HEIGHT = 1280;
 
 
 GLuint VAO, VBO;
@@ -79,7 +79,7 @@ int lastCandleIndex = 0;
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     // Scroll up (yoffset > 0) to zoom in, down to zoom out
-    zoomLevel -= (float)yoffset * 2.0f;
+    zoomLevel -= (float)yoffset * 4.0f;
 
     // Clamp the zoom so it doesn't go below 1 or above total data
     if (zoomLevel < minZoom) zoomLevel = minZoom;
@@ -145,6 +145,111 @@ unsigned int createShaderProgram() {
     return program;
 }
 
+struct ChartView {
+    GLuint fbo = 0;
+    GLuint colorTex = 0;
+    int width = 0;
+    int height = 0;
+};
+
+void createChartFramebuffer(ChartView& chart, int w, int h)
+{
+    chart.width = w;
+    chart.height = h;
+
+    // Color texture
+    glGenTextures(1, &chart.colorTex);
+    glBindTexture(GL_TEXTURE_2D, chart.colorTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // FBO
+    glGenFramebuffers(1, &chart.fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, chart.fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, chart.colorTex, 0);
+
+    // Depth/stencil buffer (optional for 3D)
+    GLuint rbo;
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+std::pair<GLuint, int>  initCandleData(std::string jsonFile) {
+    std::vector<float> candleVertices = prepareCandleData(jsonFile);
+    int candleCount = candleVertices.size() / (5 * 8); // 8 vertices per candle (2 wick + 6 body)
+
+    // Setup VAO/VBO
+    GLuint VAO, VBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, candleVertices.size() * sizeof(float), candleVertices.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    int numCandles = candleVertices.size() / ((2 + 6) * 5); // 8 vertices total per candle
+    
+	return { VAO, candleCount };
+
+}
+
+void renderChartToFBO(ChartView& chart, GLuint VAO, int numCandles)
+{
+
+
+    // Build Shader (use the same source from previous message)
+    unsigned int shaderProgram = createShaderProgram();
+
+
+    glBindFramebuffer(GL_FRAMEBUFFER, chart.fbo);
+    glViewport(0, 0, chart.width, chart.height);
+
+    glClear(GL_COLOR_BUFFER_BIT);
+    glUseProgram(shaderProgram);
+    glBindVertexArray(VAO);
+
+    int wickVertexCount = numCandles * 2;
+    int bodyVertexCount = numCandles * 6;
+
+    // lastCandleIndex should be the index of your newest data point
+    float rightEdge = (float)numCandles;
+    float leftEdge = rightEdge - zoomLevel;
+
+    // Projection: [Left, Right, Bottom, Top]
+    // Notice how rightEdge is constant, only leftEdge moves!
+    glm::mat4 projection = glm::ortho(leftEdge, rightEdge, minPrice - 2.0f, maxPrice + 2.0f);
+
+    int projLoc = glGetUniformLocation(shaderProgram, "projection");
+    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+
+
+
+
+    // 1. Draw ALL wicks at once
+    glLineWidth(1.0f);
+    glDrawArrays(GL_LINES, 0, wickVertexCount);
+
+    // 2. Draw ALL bodies at once
+    // The 'wickVertexCount' tells OpenGL to start drawing AFTER the wicks in the buffer
+    glDrawArrays(GL_TRIANGLES, wickVertexCount, bodyVertexCount);
+
+
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); // Done rendering to texture
+
+
+}
+
 
 
 int glfw_test()
@@ -172,10 +277,15 @@ int glfw_test()
         glfwTerminate();
         return -1;
     }
-
+    //GLFWwindow* window = glfwCreateWindow(1280, 800, "Chart", nullptr, nullptr);
     glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    //glfwMaximizeWindow(window);
+
+    //glfwMakeContextCurrent(window);
+    //glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
     glfwSetScrollCallback(window, scroll_callback);
+
 	glfwSwapInterval(1);// Enable V-Sync for smoother rendering
 
     // glad: load all OpenGL function pointers
@@ -191,7 +301,7 @@ int glfw_test()
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-    //io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
     ImGui::StyleColorsDark();
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -200,26 +310,13 @@ int glfw_test()
 
     std::vector<float> candleVertices = prepareCandleData("be_data.json");
     int candleCount = candleVertices.size() / (5 * 8); // 8 vertices per candle (2 wick + 6 body)
-
-    // Setup VAO/VBO
-    unsigned int VAO, VBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, candleVertices.size() * sizeof(float), candleVertices.data(), GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    int numCandles = candleVertices.size() / ((2 + 6) * 5); // 8 vertices total per candle
-    int wickVertexCount = numCandles * 2;
-    int bodyVertexCount = numCandles * 6;
+	auto [VAO, numCandles] = initCandleData("be_data.json");
 
     // Build Shader (use the same source from previous message)
     unsigned int shaderProgram = createShaderProgram();
+	bool show_nvda = true;
+	bool show_aapl = true;
+    ChartView aaplChart;  // contains fbo & colorTex
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -231,38 +328,57 @@ int glfw_test()
         ImGui::NewFrame();
 
         // --- ImGui UI ---
-        ImGui::ShowDemoWindow();
+		//ImGui::Begin("Controls"); 
+		//ImGui::Text("Use mouse scroll to zoom in/out");
+		//ImGui::End();
+  //      //ImGui::ShowDemoWindow();
+
+        ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(vp->Pos);
+        ImGui::SetNextWindowSize(vp->Size);
+        ImGui::SetNextWindowViewport(vp->ID);
+
+        ImGuiWindowFlags flags =
+            ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoCollapse;
+
+        ImGui::Begin("RootDock", nullptr, flags);
+        ImGui::DockSpace(ImGui::GetID("DockSpace"));
+        ImGui::End();
+
+        ImGui::Begin("NVDA Chart", &show_aapl);
+        ImGui::Text("Another chart");
+        ImGui::End();
+
+
+        ImGui::Begin("AAPL Chart", &show_aapl);
+
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        if (avail.x > 0 && avail.y > 0)
+        {
+            // Optional: resize FBO if ImGui window resized
+            if ((int)avail.x != aaplChart.width || (int)avail.y != aaplChart.height)
+            {
+                glDeleteTextures(1, &aaplChart.colorTex);
+                glDeleteFramebuffers(1, &aaplChart.fbo);
+                createChartFramebuffer(aaplChart, (int)avail.x, (int)avail.y);
+            }
+
+            renderChartToFBO(aaplChart, VAO, numCandles);
+
+            // Show FBO texture inside ImGui
+            ImGui::Image((void*)(intptr_t)aaplChart.colorTex, avail, ImVec2(0, 1), ImVec2(1, 0));
+        }
+
+        ImGui::End();
+
+
+
         ImGui::Render();
 
-        glClear(GL_COLOR_BUFFER_BIT);
-        glUseProgram(shaderProgram);
-        glBindVertexArray(VAO);
 
-        // lastCandleIndex should be the index of your newest data point
-        float rightEdge = (float)candleCount;
-        float leftEdge = rightEdge - zoomLevel;
-
-        // Projection: [Left, Right, Bottom, Top]
-        // Notice how rightEdge is constant, only leftEdge moves!
-        glm::mat4 projection = glm::ortho(leftEdge, rightEdge, minPrice - 2.0f, maxPrice + 2.0f);
-
-        int projLoc = glGetUniformLocation(shaderProgram, "projection");
-        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-
-
-
-
-        
-        // 1. Draw ALL wicks at once
-        glLineWidth(1.0f);
-        glDrawArrays(GL_LINES, 0, wickVertexCount);
-
-        // 2. Draw ALL bodies at once
-        // The 'wickVertexCount' tells OpenGL to start drawing AFTER the wicks in the buffer
-        glDrawArrays(GL_TRIANGLES, wickVertexCount, bodyVertexCount);
-        
-
-        
 
         // --- Render ImGui LAST ---
         
