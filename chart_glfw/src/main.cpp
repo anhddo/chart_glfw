@@ -2,6 +2,10 @@
 // This tells the linker to use main() even if we are in Windows Subsystem mode
 #pragma comment(linker, "/entry:mainCRTStartup")
 #endif
+//
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 
 #define NOMINMAX
 #include <windows.h>
@@ -20,8 +24,6 @@ using json = nlohmann::json;
 
 #include <algorithm>
 #include <vector>
-
-
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -62,6 +64,27 @@ const char* fragmentShaderSource = "#version 330 core\n"
 "void main() {\n"
 "   FragColor = vec4(ourColor, 1.0f);\n"
 "}\n\0";
+
+
+
+
+// 2. Zooming Variables
+float zoomLevel = 20.0f;    // Number of candles visible (lower = zoomed in)
+float minZoom = 5.0f;       // Maximum zoom in
+float maxZoom = 100.0f;     // Maximum zoom out (adjust based on data size)
+
+// We use this to tell OpenGL which candle should be at the right edge
+int lastCandleIndex = 0;
+
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    // Scroll up (yoffset > 0) to zoom in, down to zoom out
+    zoomLevel -= (float)yoffset * 2.0f;
+
+    // Clamp the zoom so it doesn't go below 1 or above total data
+    if (zoomLevel < minZoom) zoomLevel = minZoom;
+    if (zoomLevel > maxZoom) zoomLevel = maxZoom;
+}
 
 std::vector<float> prepareCandleData(const std::string& filename) {
     std::ifstream f(filename);
@@ -126,6 +149,9 @@ unsigned int createShaderProgram() {
 
 int glfw_test()
 {
+
+
+    // Setup Platform/Renderer backends
     // glfw: initialize and configure
     // ------------------------------
     glfwInit();
@@ -146,8 +172,10 @@ int glfw_test()
         glfwTerminate();
         return -1;
     }
+
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 	glfwSwapInterval(1);// Enable V-Sync for smoother rendering
 
     // glad: load all OpenGL function pointers
@@ -157,6 +185,19 @@ int glfw_test()
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    //io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+
     std::vector<float> candleVertices = prepareCandleData("be_data.json");
     int candleCount = candleVertices.size() / (5 * 8); // 8 vertices per candle (2 wick + 6 body)
 
@@ -181,16 +222,37 @@ int glfw_test()
     unsigned int shaderProgram = createShaderProgram();
 
     while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
+
+
+        // --- Start ImGui frame ---
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // --- ImGui UI ---
+        ImGui::ShowDemoWindow();
+        ImGui::Render();
+
         glClear(GL_COLOR_BUFFER_BIT);
         glUseProgram(shaderProgram);
         glBindVertexArray(VAO);
 
-        // --- THE SCALING MAGIC ---
-        // Projection: Left=0, Right=NumCandles, Bottom=MinPrice, Top=MaxPrice
-        glm::mat4 projection = glm::ortho(0.0f, (float)candleCount, minPrice - 5.0f, maxPrice + 5.0f);
+        // lastCandleIndex should be the index of your newest data point
+        float rightEdge = (float)candleCount;
+        float leftEdge = rightEdge - zoomLevel;
+
+        // Projection: [Left, Right, Bottom, Top]
+        // Notice how rightEdge is constant, only leftEdge moves!
+        glm::mat4 projection = glm::ortho(leftEdge, rightEdge, minPrice - 2.0f, maxPrice + 2.0f);
+
         int projLoc = glGetUniformLocation(shaderProgram, "projection");
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
+
+
+
+        
         // 1. Draw ALL wicks at once
         glLineWidth(1.0f);
         glDrawArrays(GL_LINES, 0, wickVertexCount);
@@ -200,12 +262,23 @@ int glfw_test()
         glDrawArrays(GL_TRIANGLES, wickVertexCount, bodyVertexCount);
         
 
+        
+
+        // --- Render ImGui LAST ---
+        
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
         glfwSwapBuffers(window);
-        glfwPollEvents();
+
     }
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteProgram(shaderProgram);
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     glfwTerminate();
     return 0;
 }
