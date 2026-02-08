@@ -265,7 +265,15 @@ int Renderer::glfw_test()
     // Build Shader (use the same source from previous message)
     bool show_nvda = true;
     bool show_aapl = true;
-    ChartView aaplChart;  // contains fbo & colorTex
+    std::vector<ChartView> charts(2);  // contains fbo & colorTex
+	charts[0].title = "NVDA Chart";
+	charts[1].title = "AAPL Chart";
+
+    for (auto& chart : charts) {
+        chart.shaderProgram = shaderProgram;
+        chart.vao = VAO;
+        chart.numCandles = numCandles;
+	}
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -296,32 +304,10 @@ int Renderer::glfw_test()
         ImGui::Begin("RootDock", nullptr, flags);
         ImGui::DockSpace(ImGui::GetID("DockSpace"));
         ImGui::End();
-
-        ImGui::Begin("NVDA Chart", &show_aapl);
-        ImGui::Text("Another chart");
-        ImGui::End();
-
-
-        ImGui::Begin("AAPL Chart", &show_aapl);
-
-        ImVec2 avail = ImGui::GetContentRegionAvail();
-        if (avail.x > 0 && avail.y > 0)
-        {
-            // Optional: resize FBO if ImGui window resized
-            if ((int)avail.x != aaplChart.width || (int)avail.y != aaplChart.height)
-            {
-                glDeleteTextures(1, &aaplChart.colorTex);
-                glDeleteFramebuffers(1, &aaplChart.fbo);
-                createChartFramebuffer(aaplChart, (int)avail.x, (int)avail.y);
-            }
-
-            renderChartToFBO(aaplChart, shaderProgram, VAO, numCandles);
-
-            // Show FBO texture inside ImGui
-            ImGui::Image((void*)(intptr_t)aaplChart.colorTex, avail, ImVec2(0, 1), ImVec2(1, 0));
+		for (auto& chart : charts) {
+            CreateChartView(chart);
         }
 
-        ImGui::End();
 
 
 
@@ -346,6 +332,30 @@ int Renderer::glfw_test()
 
     glfwTerminate();
     return 0;
+}
+
+void Renderer::CreateChartView(ChartView& chart)
+{
+    ImGui::Begin(chart.title, &chart.isVisible);
+
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    if (avail.x > 0 && avail.y > 0)
+    {
+        // Optional: resize FBO if ImGui window resized
+        if ((int)avail.x != chart.width || (int)avail.y != chart.height)
+        {
+            glDeleteTextures(1, &chart.colorTex);
+            glDeleteFramebuffers(1, &chart.fbo);
+            createChartFramebuffer(chart, (int)avail.x, (int)avail.y);
+        }
+
+        renderChartToFBO(chart, chart.shaderProgram, chart.vao, chart.numCandles);
+
+        // Show FBO texture inside ImGui
+        ImGui::Image((void*)(intptr_t)chart.colorTex, avail, ImVec2(0, 1), ImVec2(1, 0));
+    }
+
+    ImGui::End();
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly

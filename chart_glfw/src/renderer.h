@@ -27,9 +27,17 @@ struct CandleVertex {
 };
 struct ChartView {
     GLuint fbo = 0;
+	GLuint shaderProgram = 0;
+	GLuint vao = 0;
+    GLuint numCandles;
     GLuint colorTex = 0;
     int width = 0;
     int height = 0;
+	//std::string title;
+    const char* title;
+
+	bool isVisible = true;
+    
 };
 
 struct Candle {
@@ -44,6 +52,7 @@ public:
     const unsigned int SCR_HEIGHT = 1280;
 public:
     int glfw_test();
+    void CreateChartView(ChartView& aaplChart);
     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
 
