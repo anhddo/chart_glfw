@@ -29,6 +29,18 @@ ScannerSubscription ScannerSubscriptionSamples::TopPercentGainersIbis()
 	return scanSub;
 }
 
+ScannerSubscription ScannerSubscriptionSamples::TopPercentGainersUS()
+{
+	//! [toppercentgaineribis]
+	//Top % gainers at IBIS
+	ScannerSubscription scanSub;
+	scanSub.instrument = "STK";
+    scanSub.locationCode = "STK.US";
+    scanSub.scanCode = "TOP_PERC_GAIN";
+	//! [toppercentgaineribis]
+	return scanSub;
+}
+
 ScannerSubscription ScannerSubscriptionSamples::MostActiveFutEurex()
 {
 	//! [mostactivefuteurex]

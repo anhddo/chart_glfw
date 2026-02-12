@@ -174,6 +174,14 @@ Contract ContractSamples::USStockAtSmart(){
 	contract.exchange = "SMART";
 	return contract;
 }
+Contract ContractSamples::USStock1() {
+	Contract contract;
+	contract.symbol = "FSLY";
+	contract.secType = "STK";
+	contract.currency = "USD";
+	contract.exchange = "SMART";
+	return contract;
+}
 
 Contract ContractSamples::IBMUSStockAtSmart(){
 	Contract contract;

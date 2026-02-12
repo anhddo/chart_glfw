@@ -197,6 +197,54 @@ void Renderer::ScrollCallback(GLFWwindow* window, double xoffset, double yoffset
         renderer->onScroll(xoffset, yoffset);
     }
 }
+std::atomic<bool> scanning(false);
+std::atomic<bool> done(false);
+std::vector<float> scan_results;
+
+// Simulated long-running task
+void scan_market()
+{
+    scanning = true;
+    done = false;
+    scan_results.clear();
+
+    // Simulate work
+    for (int i = 0; i < 10; i++)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        scan_results.push_back(float(i) * 10.0f);  // fake data
+    }
+
+    scanning = false;
+    done = true;
+}
+
+
+void ScannerUI() {
+    ImGui::Begin("Market Scanner");
+
+    if (!scanning && ImGui::Button("Start Scan"))
+    {
+        // Launch background task
+        std::thread(scan_market).detach();
+    }
+
+    if (scanning)
+    {
+        ImGui::Text("Scanning in progress...");
+        ImGui::ProgressBar(float(scan_results.size()) / 10.0f);
+    }
+    else if (done)
+    {
+        ImGui::Text("Scan complete!");
+        for (auto val : scan_results)
+        {
+            ImGui::Text("Value: %.1f", val);
+        }
+    }
+
+    ImGui::End();
+}
 
 int Renderer::draw()
 {
@@ -334,6 +382,7 @@ int Renderer::draw()
         ImGui::Text("Chart goes here...");
 
         ImGui::End();
+		ScannerUI();
 
 
 

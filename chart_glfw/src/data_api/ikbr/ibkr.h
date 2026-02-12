@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 #include <cstring>
+#include <unordered_map>
 
 class EClientSocket;
 
@@ -124,10 +125,17 @@ public:
 
 public:
 
+	std::unordered_map<TickerId, double> m_last;
+	std::unordered_map<TickerId, double> m_close;
+
 	bool connect(const char* host, int port, int clientId = 0);
 	void disconnect() const;
 	bool isConnected() const;
+	// My custom code
 	void test();
+	void getHistoricalTest();
+	void scanTest();
+	void scanTest1();
 
 private:
 	void historicalDataRequests();

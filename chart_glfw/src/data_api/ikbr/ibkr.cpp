@@ -61,18 +61,7 @@ IbkrClient::~IbkrClient()
 
 	delete m_pClient;
 }
-
-void IbkrClient::test() {
-	bool bRes = m_pClient->eConnect("", 7497, 0, m_extraAuth);
-	if (bRes) {
-		printf("Connected to %s:%d clientId:%d serverVersion: %d\n", m_pClient->host().c_str(), m_pClient->port(), 0, m_pClient->EClient::serverVersion());
-		m_pReader = std::unique_ptr<EReader>(new EReader(m_pClient, &m_osSignal));
-		m_pReader->start();
-	}
-	else
-		printf("Cannot connect to %s:%d clientId:%d\n", m_pClient->host().c_str(), m_pClient->port(), 0);
-	//historicalDataRequests();
-
+void IbkrClient::getHistoricalTest() {
 	std::time_t rawtime;
 	std::tm timeinfo;
 	char queryTime[80];
@@ -98,10 +87,122 @@ void IbkrClient::test() {
 	/*** Canceling historical data requests ***/
 	m_pClient->cancelHistoricalData(4001);
 
+}
 
-	m_osSignal.waitForSignal();
-	errno = 0;
-	m_pReader->processMsgs();
+
+void IbkrClient::scanTest() {
+	/*** Requesting all available parameters which can be used to build a scanner request ***/
+	//! [reqscannerparameters]
+	m_pClient->reqScannerParameters();
+	//! [reqscannerparameters]
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+
+	/*** Triggering a scanner subscription ***/
+	//! [reqscannersubscription]
+	m_pClient->reqScannerSubscription(7001, ScannerSubscriptionSamples::HotUSStkByVolume(), TagValueListSPtr(), TagValueListSPtr());
+
+	TagValueSPtr t1(new TagValue("usdMarketCapAbove", "10000"));
+	TagValueSPtr t2(new TagValue("optVolumeAbove", "1000"));
+	TagValueSPtr t3(new TagValue("usdMarketCapAbove", "100000000"));
+
+	TagValueListSPtr TagValues(new TagValueList());
+	TagValues->push_back(t1);
+	TagValues->push_back(t2);
+	TagValues->push_back(t3);
+
+	m_pClient->reqScannerSubscription(7002, ScannerSubscriptionSamples::HotUSStkByVolume(), TagValueListSPtr(), TagValues); // requires TWS v973+
+
+	//! [reqscannersubscription]
+
+	//! [reqcomplexscanner]
+
+	TagValueSPtr t(new TagValue("underConID", "265598"));
+	TagValueListSPtr AAPLConIDTag(new TagValueList());
+	AAPLConIDTag->push_back(t);
+	m_pClient->reqScannerSubscription(7003, ScannerSubscriptionSamples::ComplexOrdersAndTrades(), TagValueListSPtr(), AAPLConIDTag); // requires TWS v975+
+
+	//! [reqcomplexscanner]
+
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+	/*** Canceling the scanner subscription ***/
+	//! [cancelscannersubscription]
+	m_pClient->cancelScannerSubscription(7001);
+	m_pClient->cancelScannerSubscription(7002);
+	//! [cancelscannersubscription]
+
+	m_state = ST_MARKETSCANNERS_ACK;
+
+}
+void IbkrClient::scanTest1() {
+	TagValueListSPtr filters(new TagValueList());
+
+	//filters->push_back(TagValueSPtr(new TagValue("usdMarketCapAbove", "100000000")));
+	filters->push_back(TagValueSPtr(new TagValue("priceAbove", "5")));
+
+	
+
+
+	m_pClient->reqScannerSubscription(7002, ScannerSubscriptionSamples::TopPercentGainersUS(), TagValueListSPtr(), filters); // requires TWS v973+
+
+}
+
+
+void IbkrClient::test() {
+
+	//historicalDataRequests();
+
+	//getHistoricalTest();
+	
+	//scanTest1();
+
+
+	//int counter = 0;
+	//while (m_pClient->isConnected()) {
+	//	m_osSignal.waitForSignal();
+	//	errno = 0;
+	//	m_pReader->processMsgs();
+	//	printf("Processed %d message cycles\n", ++counter);
+	//}
+
+	unsigned attempt = 0;
+	printf("Start of C++ Socket Client Test %u\n", attempt);
+
+	for (;;) {
+		++attempt;
+
+		bool bRes = m_pClient->eConnect("", 7495, 0, m_extraAuth);
+		if (bRes) {
+			printf("Connected to %s:%d clientId:%d serverVersion: %d\n", m_pClient->host().c_str(), m_pClient->port(), 0, m_pClient->EClient::serverVersion());
+			m_pReader = std::unique_ptr<EReader>(new EReader(m_pClient, &m_osSignal));
+			m_pReader->start();
+		}
+		else
+			printf("Cannot connect to %s:%d clientId:%d\n", m_pClient->host().c_str(), m_pClient->port(), 0);
+
+		m_pClient->reqMarketDataType(3);
+
+		// 2. Now request the market data as usual
+		Contract contract;
+		contract.symbol = "CART";
+		contract.secType = "STK";
+		//contract.currency = "USD";
+		contract.exchange = "NASDAQ";
+
+		m_pClient->reqMktData(8001, contract, "", false, false, TagValueListSPtr());
+		//m_pClient->reqMktData(1004, ContractSamples::USStockAtSmart(), "233,236", false, false, TagValueListSPtr());
+		while (m_pClient->isConnected())
+		{
+			m_osSignal.waitForSignal();
+			m_pReader->processMsgs();
+		}
+		
+		if (attempt >= 10) {
+			break;
+		}
+		printf("attempt %u of %u\n", attempt, 10);
+		std::this_thread::sleep_for(std::chrono::seconds(2));
+
+	}
 
 
 }
@@ -1601,6 +1702,8 @@ void IbkrClient::nextValidId(OrderId orderId)
 	//m_state = ST_PING;
 	//m_state = ST_WHATIFSAMPLES;
 	//m_state = ST_WSH;
+
+
 }
 
 
@@ -1651,17 +1754,104 @@ void IbkrClient::error(int id, time_t errorTime, int errorCode, const std::strin
 	}
 }
 //! [error]
+// New [tickprice]
+void IbkrClient::tickPrice(TickerId tickerId,
+	TickType field,
+	double price,
+	const TickAttrib& attribs)
+{
+	switch (field)
+	{
+	case LAST:
+	case DELAYED_LAST:
+		m_last[tickerId] = price;
+		printf("LAST (%ld): %.2f\n", tickerId, price);
+		break;
 
-//! [tickprice]
-void IbkrClient::tickPrice(TickerId tickerId, TickType field, double price, const TickAttrib& attribs) {
-	printf("Tick Price. Ticker Id: %ld, Field: %d, Price: %s, CanAutoExecute: %d, PastLimit: %d, PreOpen: %d\n", tickerId, (int)field, Utils::doubleMaxString(price).c_str(), attribs.canAutoExecute, attribs.pastLimit, attribs.preOpen);
-}
-//! [tickprice]
+	case CLOSE:
+	case DELAYED_CLOSE:
+		m_close[tickerId] = price;
+		printf("CLOSE (%ld): %.2f\n", tickerId, price);
+		break;
 
-//! [ticksize]
-void IbkrClient::tickSize(TickerId tickerId, TickType field, Decimal size) {
-	printf("Tick Size. Ticker Id: %ld, Field: %d, Size: %s\n", tickerId, (int)field, DecimalFunctions::decimalStringToDisplay(size).c_str());
+	case BID:
+	case DELAYED_BID:
+		printf("BID (%ld): %.2f\n", tickerId, price);
+		break;
+
+	case ASK:
+	case DELAYED_ASK:
+		printf("ASK (%ld): %.2f\n", tickerId, price);
+		break;
+
+	case HIGH:
+	case DELAYED_HIGH:
+		printf("HIGH (%ld): %.2f\n", tickerId, price);
+		break;
+
+	case LOW:
+	case DELAYED_LOW:
+		printf("LOW (%ld): %.2f\n", tickerId, price);
+		break;
+
+	default:
+		return; // ignore noise
+	}
+
+	// Calculate % gain if we have both values
+	if (m_last.count(tickerId) && m_close.count(tickerId) && m_close[tickerId] != 0)
+	{
+		double gain =
+			(m_last[tickerId] - m_close[tickerId]) /
+			m_close[tickerId] * 100.0;
+
+		printf(">>> Ticker %ld Gain%%: %.2f%%\n\n", tickerId, gain);
+	}
 }
+
+// New [ticksize]
+void IbkrClient::tickSize(TickerId tickerId,
+	TickType field,
+	Decimal size)
+{
+	switch (field)
+	{
+	case VOLUME:
+	case DELAYED_VOLUME:
+		printf("VOLUME (%ld): %s\n",
+			tickerId,
+			DecimalFunctions::decimalStringToDisplay(size).c_str());
+		break;
+
+	case BID_SIZE:
+	case DELAYED_BID_SIZE:
+		printf("BID_SIZE (%ld): %s\n",
+			tickerId,
+			DecimalFunctions::decimalStringToDisplay(size).c_str());
+		break;
+
+	case ASK_SIZE:
+	case DELAYED_ASK_SIZE:
+		printf("ASK_SIZE (%ld): %s\n",
+			tickerId,
+			DecimalFunctions::decimalStringToDisplay(size).c_str());
+		break;
+
+	default:
+		return; // ignore noise
+	}
+}
+
+////! [tickprice]
+//void IbkrClient::tickPrice(TickerId tickerId, TickType field, double price, const TickAttrib& attribs) {
+//	printf("Tick Price. Ticker Id: %ld, Field: %d, Price: %s, CanAutoExecute: %d, PastLimit: %d, PreOpen: %d\n", tickerId, (int)field, Utils::doubleMaxString(price).c_str(), attribs.canAutoExecute, attribs.pastLimit, attribs.preOpen);
+//}
+////! [tickprice]
+//
+////! [ticksize]
+//void IbkrClient::tickSize(TickerId tickerId, TickType field, Decimal size) {
+//	printf("Tick Size. Ticker Id: %ld, Field: %d, Size: %s\n", tickerId, (int)field, DecimalFunctions::decimalStringToDisplay(size).c_str());
+//}
 //! [ticksize]
 
 //! [tickoptioncomputation]

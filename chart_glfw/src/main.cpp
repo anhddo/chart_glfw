@@ -10,14 +10,27 @@
 #include "data_api/ikbr/ibkr.h"
 //#include "data_api/ikbr/MainClientDemo.h"
 
+class AppController {
+	public:
+	AppController() {}
+	~AppController() {}
+	int option = 0;
+	void run() {
+		if (option == 1) {
+			IbkrClient client;
+			client.test();
+		}
+		else {
+			Renderer renderer;
+			renderer.draw();
+		}
+	}
+};
+
 
 int main() {
-	//readfile();
-	Renderer renderer;
-	renderer.draw();
-	//main1(0, nullptr);
-	//IbkrClient client;
-	//client.test();
+	AppController app;
+	app.option = 1; // Set to 1 to run IBKR client test, 0 to run renderer
+	app.run();
 
 }
-
