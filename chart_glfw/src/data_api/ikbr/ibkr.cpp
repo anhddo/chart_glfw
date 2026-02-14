@@ -134,6 +134,11 @@ void IbkrClient::scanTest() {
 
 }
 void IbkrClient::scanTest1() {
+	ScannerSubscription scanSub;
+	scanSub.instrument = "STK";
+	scanSub.locationCode = "STK.US";
+	scanSub.scanCode = "TOP_AFTER_HOURS_PERC_GAIN";
+
 	TagValueListSPtr filters(new TagValueList());
 
 	//filters->push_back(TagValueSPtr(new TagValue("usdMarketCapAbove", "100000000")));
@@ -142,7 +147,20 @@ void IbkrClient::scanTest1() {
 	
 
 
-	m_pClient->reqScannerSubscription(7002, ScannerSubscriptionSamples::TopPercentGainersUS(), TagValueListSPtr(), filters); // requires TWS v973+
+	m_pClient->reqScannerSubscription(7002, scanSub, TagValueListSPtr(), filters); // requires TWS v973+
+
+}
+	
+void IbkrClient::reqMarketDataTest() {
+		Contract contract;
+	contract.symbol = "CART";
+	contract.secType = "STK";
+	//contract.currency = "USD";
+	contract.exchange = "NASDAQ";
+	m_pClient->reqMktData(8001, contract, "", false, false, TagValueListSPtr());
+	// 
+	//m_pClient->reqMktData(1004, ContractSamples::USStockAtSmart(), "233,236", false, false, TagValueListSPtr());
+
 
 }
 
@@ -179,17 +197,13 @@ void IbkrClient::test() {
 		else
 			printf("Cannot connect to %s:%d clientId:%d\n", m_pClient->host().c_str(), m_pClient->port(), 0);
 
-		m_pClient->reqMarketDataType(3);
+		scanTest1();
+		//m_pClient->reqScannerParameters();
+		// 
+		
+		//m_pClient->reqMarketDataType(3);
 
 		// 2. Now request the market data as usual
-		Contract contract;
-		contract.symbol = "CART";
-		contract.secType = "STK";
-		//contract.currency = "USD";
-		contract.exchange = "NASDAQ";
-
-		m_pClient->reqMktData(8001, contract, "", false, false, TagValueListSPtr());
-		//m_pClient->reqMktData(1004, ContractSamples::USStockAtSmart(), "233,236", false, false, TagValueListSPtr());
 		while (m_pClient->isConnected())
 		{
 			m_osSignal.waitForSignal();
@@ -2286,9 +2300,24 @@ void IbkrClient::historicalDataEnd(int reqId, const std::string& startDateStr, c
 }
 //! [historicaldataend]
 
+void IbkrClient::saveScannerXML(const std::string& xml)
+{
+	std::ofstream file("scanner_parameters.xml");
+
+	if (file.is_open()) {
+		file << xml;
+		file.close();
+		std::cout << "Scanner parameters saved.\n";
+	}
+	else {
+		std::cerr << "Failed to open file.\n";
+	}
+}
+
 //! [scannerparameters]
 void IbkrClient::scannerParameters(const std::string& xml) {
 	printf("ScannerParameters. %s\n", xml.c_str());
+	saveScannerXML(xml);
 }
 //! [scannerparameters]
 

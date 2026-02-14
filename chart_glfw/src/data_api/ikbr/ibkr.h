@@ -136,9 +136,12 @@ public:
 	void getHistoricalTest();
 	void scanTest();
 	void scanTest1();
+	void reqMarketDataTest();
 
 private:
+	void saveScannerXML(const std::string& xml);
 	void historicalDataRequests();
+
 
 	void pnlOperation();
 	void pnlSingleOperation();

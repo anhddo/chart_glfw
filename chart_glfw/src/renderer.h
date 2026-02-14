@@ -48,9 +48,7 @@ class Renderer
 public:
     Renderer();
     ~Renderer();
-    const unsigned int SCR_WIDTH = 2560;
-    const unsigned int SCR_HEIGHT = 1280;
-public:
+    void init(GLFWwindow* window);
     int draw();
     void CreateChartView(ChartView& aaplChart);
     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);

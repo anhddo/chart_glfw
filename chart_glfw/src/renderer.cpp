@@ -248,164 +248,80 @@ void ScannerUI() {
 
 int Renderer::draw()
 {
+    // --- Start ImGui frame ---
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // --- ImGui UI ---
+    //ImGui::Begin("Controls"); 
+    //ImGui::Text("Use mouse scroll to zoom in/out");
+    //ImGui::End();
+//      //ImGui::ShowDemoWindow();
+
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(vp->Pos);
+    ImGui::SetNextWindowSize(vp->Size);
+    ImGui::SetNextWindowViewport(vp->ID);
+
+    ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse;
+
+    ImGui::Begin("RootDock", nullptr, flags);
+    ImGui::DockSpace(ImGui::GetID("DockSpace"));
+    ImGui::End();
+
+    //for (auto& chart : charts) {
+    //    CreateChartView(chart);
+    //}
+
+    //ImGui::Begin("Mini Chart");
+
+    //ImGui::InputText("Symbol", symbolInput, IM_ARRAYSIZE(symbolInput));
+    //if (ImGui::IsItemDeactivatedAfterEdit()) { // Enter pressed
+    //    requestData = true;
+    //    currentSymbol = symbolInput;
+    //}
+
+    //ImGui::SameLine();
+    //if (ImGui::Button("Load")) {
+    //    requestData = true;
+    //    currentSymbol = symbolInput;
+    //}
 
 
-    // Setup Platform/Renderer backends
-    // glfw: initialize and configure
-    // ------------------------------
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
+    //ImGui::Separator();
 
-    // glfw window creation
-    // --------------------
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
-    if (window == NULL)
-    {
-        std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
+    //// Chart placeholder
+    //ImGui::Text("Symbol: %s", currentSymbol.c_str());
+    //ImGui::Text("Chart goes here...");
+
+    //ScannerUI();
+
+
+    // 2. Create the UI Window and Button
+    ImGui::Begin("Control Panel"); // Create a window called "Control Panel"
+
+    if (ImGui::Button("Click Me!")) {
+        // This code runs ONLY when the button is pressed
+        std::cout << "Button was clicked!" << std::endl;
     }
-    //GLFWwindow* window = glfwCreateWindow(1280, 800, "Chart", nullptr, nullptr);
-    glfwMakeContextCurrent(window);
 
-    glfwSetWindowUserPointer(window, this);
-    //glfwMaximizeWindow(window);
-
-    //glfwMakeContextCurrent(window);
-    //glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-
-    glfwSetScrollCallback(window, Renderer::ScrollCallback);
-
-    glfwSwapInterval(1);// Enable V-Sync for smoother rendering
-
-    // glad: load all OpenGL function pointers
-    // ---------------------------------------
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
-    ImGui::StyleColorsDark();
-
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
-
-	GLuint shaderProgram = createShaderProgram();
-
-
-    std::vector<float> candleVertices = prepareCandleData("be_data.json");
-    int candleCount = candleVertices.size() / (5 * 8); // 8 vertices per candle (2 wick + 6 body)
-    auto [VAO, numCandles] = initCandleData("be_data.json");
-
-    // Build Shader (use the same source from previous message)
-    bool show_nvda = true;
-    bool show_aapl = true;
-    std::vector<ChartView> charts(2);  // contains fbo & colorTex
-	charts[0].title = "NVDA Chart";
-	charts[1].title = "AAPL Chart";
-
-    for (auto& chart : charts) {
-        chart.shaderProgram = shaderProgram;
-        chart.vao = VAO;
-        chart.numCandles = numCandles;
-	}
-
-    char symbolInput[32] = "";
-    bool requestData = false;
-    std::string currentSymbol = "";
-
-
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-
-
-        // --- Start ImGui frame ---
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        // --- ImGui UI ---
-        //ImGui::Begin("Controls"); 
-        //ImGui::Text("Use mouse scroll to zoom in/out");
-        //ImGui::End();
-  //      //ImGui::ShowDemoWindow();
-
-        ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(vp->Pos);
-        ImGui::SetNextWindowSize(vp->Size);
-        ImGui::SetNextWindowViewport(vp->ID);
-
-        ImGuiWindowFlags flags =
-            ImGuiWindowFlags_NoTitleBar |
-            ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoCollapse;
-
-        ImGui::Begin("RootDock", nullptr, flags);
-        ImGui::DockSpace(ImGui::GetID("DockSpace"));
-        ImGui::End();
-		for (auto& chart : charts) {
-            CreateChartView(chart);
-        }
-
-        ImGui::Begin("Mini Chart");
-
-        ImGui::InputText("Symbol", symbolInput, IM_ARRAYSIZE(symbolInput));
-        if (ImGui::IsItemDeactivatedAfterEdit()) { // Enter pressed
-            requestData = true;
-            currentSymbol = symbolInput;
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Load")) {
-            requestData = true;
-            currentSymbol = symbolInput;
-        }
-
-        ImGui::Separator();
-
-        // Chart placeholder
-        ImGui::Text("Symbol: %s", currentSymbol.c_str());
-        ImGui::Text("Chart goes here...");
-
-        ImGui::End();
-		ScannerUI();
+	ImGui::End();
 
 
 
-        ImGui::Render();
+    ImGui::Render();
 
 
 
-        // --- Render ImGui LAST ---
+    // --- Render ImGui LAST ---
 
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        glfwSwapBuffers(window);
-
-    }
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteProgram(shaderProgram);
-
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-
-    glfwTerminate();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     return 0;
 }
 
@@ -449,8 +365,19 @@ void Renderer::framebuffer_size_callback(GLFWwindow* window, int width, int heig
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
-Renderer::Renderer() {
+void Renderer::init(GLFWwindow* window) {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
 }
+Renderer::Renderer(){}
 
 Renderer::~Renderer() {
 }
