@@ -4,5 +4,5 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="chart_glfw/chart_glfw.vcxproj" Id="a1146bd4-eebf-4f68-ae70-f1e4661ceb10" />
-  <Project Path="third_party/ibkr_api/client/TwsSocketClientStatic.vcxproj" Id="256e5e0b-3fd4-49e3-b7f2-2995ac60721d" />
+  <Project Path="chart_glfw/third_party/ibkr_api/client/TwsSocketClientStatic.vcxproj" Id="256e5e0b-3fd4-49e3-b7f2-2995ac60721d" />
 </Solution>

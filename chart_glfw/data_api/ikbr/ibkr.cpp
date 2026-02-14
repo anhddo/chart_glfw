@@ -36,6 +36,7 @@
 #include <ctime>
 #include <fstream>
 #include <cstdint>
+#include <queue>
 
 const int PING_DEADLINE = 2; // seconds
 const int SLEEP_BETWEEN_PINGS = 30; // seconds
@@ -61,6 +62,9 @@ IbkrClient::~IbkrClient()
 
 	delete m_pClient;
 }
+
+
+
 void IbkrClient::getHistoricalTest() {
 	std::time_t rawtime;
 	std::tm timeinfo;
@@ -89,6 +93,14 @@ void IbkrClient::getHistoricalTest() {
 
 }
 
+std::queue<Event> IbkrClient::consumeEvents() {
+	std::queue<Event> localQueue;
+	{
+		std::lock_guard<std::mutex> lock(m_eventMutex);
+		std::swap(localQueue, m_eventQueue);
+	}
+	return localQueue;
+}
 
 void IbkrClient::scanTest() {
 	/*** Requesting all available parameters which can be used to build a scanner request ***/
@@ -133,23 +145,7 @@ void IbkrClient::scanTest() {
 	m_state = ST_MARKETSCANNERS_ACK;
 
 }
-void IbkrClient::scanTest1() {
-	ScannerSubscription scanSub;
-	scanSub.instrument = "STK";
-	scanSub.locationCode = "STK.US";
-	scanSub.scanCode = "TOP_AFTER_HOURS_PERC_GAIN";
 
-	TagValueListSPtr filters(new TagValueList());
-
-	//filters->push_back(TagValueSPtr(new TagValue("usdMarketCapAbove", "100000000")));
-	filters->push_back(TagValueSPtr(new TagValue("priceAbove", "5")));
-
-	
-
-
-	m_pClient->reqScannerSubscription(7002, scanSub, TagValueListSPtr(), filters); // requires TWS v973+
-
-}
 	
 void IbkrClient::reqMarketDataTest() {
 		Contract contract;
@@ -164,8 +160,140 @@ void IbkrClient::reqMarketDataTest() {
 
 }
 
+void IbkrClient::scanTest1() {
+	ScannerSubscription scanSub;
+	scanSub.instrument = "STK";
+	scanSub.locationCode = "STK.US";
+	scanSub.scanCode = "TOP_AFTER_HOURS_PERC_GAIN";
 
-void IbkrClient::test() {
+	TagValueListSPtr filters(new TagValueList());
+
+	//filters->push_back(TagValueSPtr(new TagValue("usdMarketCapAbove", "100000000")));
+	filters->push_back(TagValueSPtr(new TagValue("priceAbove", "5")));
+
+
+
+
+	m_pClient->reqScannerSubscription(7002, scanSub, TagValueListSPtr(), filters); // requires TWS v973+
+
+}
+void IbkrClient::pushCommand(Command command)
+{
+	std::lock_guard<std::mutex> lock(m_commandMutex);
+	m_commandQueue.push(std::move(command));
+}
+
+void IbkrClient::pushEvent(Event event) {
+	m_eventQueue.push(std::move(event));
+}
+
+
+
+// Process commands (called from IBKR thread)
+void IbkrClient::processCommands() {
+	// Swap queues to minimize lock time
+	std::queue<Command> localQueue;
+	{
+		std::lock_guard<std::mutex> lock(m_commandMutex);
+		std::swap(localQueue, m_commandQueue);
+	}
+
+	// Process all pending commands
+	while (!localQueue.empty()) {
+		Command cmd = std::move(localQueue.front());
+		localQueue.pop();
+
+		// Use std::visit to handle each command type
+		std::visit([this](auto&& arg) {
+			using T = std::decay_t<decltype(arg)>;
+
+			if constexpr (std::is_same_v<T, StartScannerCommand>) {
+				printf("Processing StartScannerCommand: reqId=%d, scanCode=%s, priceAbove=%.2f\n",
+					arg.reqId, arg.scanCode.c_str(), arg.priceAbove);
+
+				//ScannerSubscription scanSub;
+				//scanSub.instrument = "STK";
+				//scanSub.scanCode = arg.scanCode;
+
+				//TagValueListSPtr filters(new TagValueList());
+				//filters->push_back(TagValueSPtr(new TagValue("priceAbove",
+				//	std::to_string(arg.priceAbove))));
+
+				//m_pClient->reqScannerSubscription(arg.reqId, scanSub,
+				//	TagValueListSPtr(), filters);
+
+				ScannerSubscription scanSub;
+				scanSub.instrument = "STK";
+				scanSub.locationCode = "STK.US";
+				scanSub.scanCode = "TOP_AFTER_HOURS_PERC_GAIN";
+
+				TagValueListSPtr filters(new TagValueList());
+
+				//filters->push_back(TagValueSPtr(new TagValue("usdMarketCapAbove", "100000000")));
+				filters->push_back(TagValueSPtr(new TagValue("priceAbove", "5")));
+
+
+
+
+				m_pClient->reqScannerSubscription(7002, scanSub, TagValueListSPtr(), filters); // requires TWS v973+
+			}
+			else if constexpr (std::is_same_v<T, CancelScannerCommand>) {
+				printf("Processing CancelScannerCommand: reqId=%d\n", arg.reqId);
+				m_pClient->cancelScannerSubscription(arg.reqId);
+			}
+			
+			}, cmd.data);
+	}
+}
+
+
+
+
+void IbkrClient::processLoop() {
+
+	unsigned attempt = 0;
+	printf("Start of C++ Socket Client Test %u\n", attempt);
+
+
+	bool bRes = m_pClient->eConnect("", 7495, 0, m_extraAuth);
+	if (bRes) {
+		printf("Connected to %s:%d clientId:%d serverVersion: %d\n", m_pClient->host().c_str(), m_pClient->port(), 0, m_pClient->EClient::serverVersion());
+		m_pReader = std::unique_ptr<EReader>(new EReader(m_pClient, &m_osSignal));
+		m_pReader->start();
+	}
+	else
+		printf("Cannot connect to %s:%d clientId:%d\n", m_pClient->host().c_str(), m_pClient->port(), 0);
+
+
+	//std::queue<Command> localQueue;
+	//{
+	//	std::lock_guard<std::mutex> lock(m_commandMutex);
+	//	std::swap(localQueue, m_commandQueue);
+	//}
+
+
+
+	printf("attempt %u of %u\n", attempt, 10);
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+
+	int counter = 0;
+	while (m_pClient->isConnected()) {
+		processCommands();
+		counter++;
+		m_osSignal.waitForSignal();
+		errno = 0;
+		m_pReader->processMsgs();
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		std::printf("Processed message cycle %d\n", counter);
+	}
+
+}
+void IbkrClient::stop()
+{
+
+}
+
+void IbkrClient::start() {
 
 	//historicalDataRequests();
 
@@ -182,41 +310,10 @@ void IbkrClient::test() {
 	//	printf("Processed %d message cycles\n", ++counter);
 	//}
 
-	unsigned attempt = 0;
-	printf("Start of C++ Socket Client Test %u\n", attempt);
 
-	for (;;) {
-		++attempt;
-
-		bool bRes = m_pClient->eConnect("", 7495, 0, m_extraAuth);
-		if (bRes) {
-			printf("Connected to %s:%d clientId:%d serverVersion: %d\n", m_pClient->host().c_str(), m_pClient->port(), 0, m_pClient->EClient::serverVersion());
-			m_pReader = std::unique_ptr<EReader>(new EReader(m_pClient, &m_osSignal));
-			m_pReader->start();
-		}
-		else
-			printf("Cannot connect to %s:%d clientId:%d\n", m_pClient->host().c_str(), m_pClient->port(), 0);
-
-		scanTest1();
-		//m_pClient->reqScannerParameters();
-		// 
-		
-		//m_pClient->reqMarketDataType(3);
-
-		// 2. Now request the market data as usual
-		while (m_pClient->isConnected())
-		{
-			m_osSignal.waitForSignal();
-			m_pReader->processMsgs();
-		}
-		
-		if (attempt >= 10) {
-			break;
-		}
-		printf("attempt %u of %u\n", attempt, 10);
-		std::this_thread::sleep_for(std::chrono::seconds(2));
-
-	}
+	
+	//std::thread m_thread = std::thread(&IbkrClient::processLoop, this);
+	
 
 
 }
@@ -2325,13 +2422,41 @@ void IbkrClient::scannerParameters(const std::string& xml) {
 void IbkrClient::scannerData(int reqId, int rank, const ContractDetails& contractDetails,
 	const std::string& distance, const std::string& benchmark, const std::string& projection,
 	const std::string& legsStr) {
-	printf("ScannerData. %d - Rank: %d, Symbol: %s, SecType: %s, Currency: %s, Distance: %s, Benchmark: %s, Projection: %s, Legs String: %s\n", reqId, rank, contractDetails.contract.symbol.c_str(), contractDetails.contract.secType.c_str(), contractDetails.contract.currency.c_str(), distance.c_str(), benchmark.c_str(), projection.c_str(), legsStr.c_str());
+	//printf("ScannerData. %d - Rank: %d, Symbol: %s, SecType: %s, Currency: %s, Distance: %s, Benchmark: %s, Projection: %s, Legs String: %s\n", reqId, rank, contractDetails.contract.symbol.c_str(), contractDetails.contract.secType.c_str(), contractDetails.contract.currency.c_str(), distance.c_str(), benchmark.c_str(), projection.c_str(), legsStr.c_str());
+	// Store result temporarily
+	ScannerResultItem item;
+	item.rank = rank;
+	item.symbol = contractDetails.contract.symbol;
+	item.secType = contractDetails.contract.secType;
+	item.currency = contractDetails.contract.currency;
+	item.conId = contractDetails.contract.conId;
+
+	
+	m_pendingScannerResults[reqId].push_back(item);
+
 }
 //! [scannerdata]
 
 //! [scannerdataend]
 void IbkrClient::scannerDataEnd(int reqId) {
 	printf("ScannerDataEnd. %d\n", reqId);
+	std::vector<ScannerResultItem> results;
+	{
+		auto it = m_pendingScannerResults.find(reqId);
+		if (it != m_pendingScannerResults.end()) {
+			results = std::move(it->second);
+			m_pendingScannerResults.erase(it);
+		}
+	}
+
+	// Push complete event
+	if (!results.empty()) {
+		ScannerResult evt;
+		evt.reqId = reqId;
+		evt.items= std::move(results);
+
+		pushEvent(Event{ evt });		
+	}
 }
 //! [scannerdataend]
 

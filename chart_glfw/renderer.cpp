@@ -246,7 +246,9 @@ void ScannerUI() {
     ImGui::End();
 }
 
-int Renderer::draw()
+#include "DataManager.h"
+
+int Renderer::draw(DataManager& dataManager)
 {
     // --- Start ImGui frame ---
     ImGui_ImplOpenGL3_NewFrame();
@@ -303,13 +305,56 @@ int Renderer::draw()
     //ScannerUI();
 
 
-    // 2. Create the UI Window and Button
-    ImGui::Begin("Control Panel"); // Create a window called "Control Panel"
+	// Scanner Results Window
+	ImGui::Begin("Market Scanner Results");
 
-    if (ImGui::Button("Click Me!")) {
-        // This code runs ONLY when the button is pressed
-        std::cout << "Button was clicked!" << std::endl;
-    }
+	const auto& scanResults = dataManager.currentScannerResult;
+
+	ImGui::Text("Request ID: %d", scanResults.reqId);
+	ImGui::Text("Total Results: %zu", scanResults.items.size());
+	ImGui::Separator();
+
+	if (ImGui::BeginTable("ScannerTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
+		// Setup columns
+		ImGui::TableSetupColumn("Rank", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+		ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+		ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+		ImGui::TableSetupColumn("Currency", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+		ImGui::TableSetupColumn("Contract ID", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableHeadersRow();
+
+		// Display each result
+		for (const auto& item : scanResults.items) {
+			ImGui::TableNextRow();
+
+			ImGui::TableSetColumnIndex(0);
+			ImGui::Text("%d", item.rank);
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::Text("%s", item.symbol.c_str());
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::Text("%s", item.secType.c_str());
+
+			ImGui::TableSetColumnIndex(3);
+			ImGui::Text("%s", item.currency.c_str());
+
+			ImGui::TableSetColumnIndex(4);
+			ImGui::Text("%ld", item.conId);
+		}
+
+		ImGui::EndTable();
+	}
+
+	ImGui::End();
+
+	// 2. Create the UI Window and Button
+	ImGui::Begin("Control Panel"); // Create a window called "Control Panel"
+
+	if (ImGui::Button("Click Me!")) {
+		// This code runs ONLY when the button is pressed
+		std::cout << "Button was clicked!" << std::endl;
+	}
 
 	ImGui::End();
 

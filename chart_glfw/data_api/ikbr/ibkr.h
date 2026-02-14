@@ -11,7 +11,11 @@
 #include <memory>
 #include <vector>
 #include <cstring>
+#include <mutex>
+#include <queue>
 #include <unordered_map>
+#include "../../command.h"
+#include "../../event.h"
 
 class EClientSocket;
 
@@ -122,8 +126,12 @@ public:
 	void setConnectOptions(const std::string&);
 	void setOptionalCapabilities(const std::string&);
 	void processMessages();
+	void processLoop();
+	void stop();
+	void pushCommand(Command command);
+	void pushEvent(Event command);
+	void processCommands();
 
-public:
 
 	std::unordered_map<TickerId, double> m_last;
 	std::unordered_map<TickerId, double> m_close;
@@ -132,15 +140,23 @@ public:
 	void disconnect() const;
 	bool isConnected() const;
 	// My custom code
-	void test();
+	void start();
 	void getHistoricalTest();
 	void scanTest();
 	void scanTest1();
 	void reqMarketDataTest();
+	std::queue<Event> consumeEvents();
 
 private:
+	std::mutex m_commandMutex;
+	std::mutex m_eventMutex;
+	std::queue<Command> m_commandQueue;
+	std::queue<Event> m_eventQueue;
+	std::unordered_map<int, std::vector<ScannerResultItem>> m_pendingScannerResults;
+
 	void saveScannerXML(const std::string& xml);
 	void historicalDataRequests();
+
 
 
 	void pnlOperation();

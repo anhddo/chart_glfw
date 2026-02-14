@@ -7,7 +7,10 @@
 #include <windows.h>  // first
 
 #include "renderer.h"
+#include "event.h"
 #include "data_api/ikbr/ibkr.h"
+#include "DataManager.h"
+
 //#include "data_api/ikbr/MainClientDemo.h"
 
 std::queue<std::string> messageQueue;
@@ -43,62 +46,101 @@ void processMessages() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 }
-struct Command
-{
-	enum class Type
-	{
-		StartScanner,
-		SubscribeMarketData,
-		PlaceOrder
-	};
 
-	Type type;
-};
-struct ScannerResult
-{
-	int rank;
-	std::string symbol;
-};
 
-struct TickPrice
-{
-	int tickerId;
-	double price;
-};
-
-struct OrderStatus
-{
-	int orderId;
-	std::string status;
-};
-
-#include <variant>
-
-using EventData = std::variant<
-	ScannerResult,
-	TickPrice,
-	OrderStatus
->;
-
-struct Event
-{
-	EventData data;
-};
-
-class AppController {
+class App {
 	public:
-	AppController() {}
-	~AppController() {}
+	App() {}
+	~App() {}
 	int option = 0;
-	std::queue<Command> m_commandQueue;
-	std::queue<Event>   m_eventQueue;
 
-	std::mutex m_commandMutex;
-	std::mutex m_eventMutex;
+	std::mutex mtx; 
+	std::vector<ScannerResultItem> m_latestScannerResults;
+	int m_scannerReqId = 0;
 
 	std::unique_ptr<IbkrClient> m_ibClient;
 
     void start() {
+		m_ibClient = std::make_unique<IbkrClient>();
+        std::thread ibThread([this]() {
+			m_ibClient->processLoop();
+            });
+		ibThread.detach();
+		std::this_thread::sleep_for(std::chrono::seconds(1)); // Give the IB client time to start
+		startScanner(1, "TOP_PERC_GAIN");
+
+    }
+
+
+    void stop()
+    {
+        if (m_ibClient)
+            m_ibClient->stop();
+    }
+    void update(){
+        // Process events
+        
+        std::queue<Event> eventQueue= m_ibClient->consumeEvents();;
+
+        
+
+        while (!eventQueue.empty())
+        {
+            handleEvent(eventQueue.front());
+            eventQueue.pop();
+        }
+    
+        //std::queue<Command> localQueueCommand;
+
+        //// Process Command
+        //{
+        //    std::lock_guard<std::mutex> lock(mtx);
+        //    while (!m_eventQueue.empty()) {
+        //        Event event = m_eventQueue.front();
+        //        m_eventQueue.pop();
+        //        updateAppState(event);
+        //        // Handle event (e.g., update UI with new scanner results, tick prices, order status)
+        //    }
+        //}
+	}
+	DataManager dataManager;
+private:
+    
+    void startScanner(int reqId, const std::string& scanCode, double priceAbove = 5.0) {
+        StartScannerCommand cmd;
+        cmd.reqId = reqId;
+        cmd.scanCode = scanCode;
+        cmd.locationCode = "STK.US";
+        cmd.priceAbove = priceAbove;
+
+        Command command;
+        command.data = cmd;
+        m_ibClient->pushCommand(std::move(command));
+
+        printf("UI: Scanner command sent (reqId=%d, scanCode=%s)\n", reqId, scanCode.c_str());
+    }
+
+
+
+    void handleEvent(const Event& event) {
+        std::visit([this](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+
+            if constexpr (std::is_same_v<T, ScannerResult>) {
+				dataManager.currentScannerResult = arg; // Update the current scanner result in the data manager
+
+ 
+                CancelScannerCommand cancelCmd;
+                cancelCmd.reqId = arg.reqId;
+                Command command;
+                command.data = cancelCmd;
+                m_ibClient->pushCommand(std::move(command));
+            }
+            // Add more event types here as needed
+
+
+            }, event.data);
+
     }
 
 };
@@ -106,6 +148,7 @@ class AppController {
 const unsigned int SCR_WIDTH = 2560;
 const unsigned int SCR_HEIGHT = 1280;
 int main() {
+	
 
 
     // Setup Platform/Renderer backends
@@ -150,6 +193,8 @@ int main() {
         return -1;
     }
     // Setup Dear ImGui context
+	App appController;
+	appController.start();
 
     Renderer renderer;
     renderer.init(window);
@@ -182,9 +227,8 @@ int main() {
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
-
-
-        renderer.draw();
+        appController.update();
+        renderer.draw(appController.dataManager);
 
 
 
