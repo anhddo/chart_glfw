@@ -25,13 +25,16 @@ void App::init(GLFWwindow* window)
     std::this_thread::sleep_for(std::chrono::seconds(1));
     startScanner(1, "TOP_PERC_GAIN");
 	m_renderer = std::make_unique<Renderer>();
-    
-    m_renderer->init(window);
 
-    // Wire up symbol input callback
-    m_renderer->onSymbolEntered = [this](const std::string& symbol) {
-        requestChart(symbol);
-    };
+	m_renderer->init(window);
+
+	// Set window user pointer so scroll callback can access renderer
+	glfwSetWindowUserPointer(window, m_renderer.get());
+
+	// Wire up symbol input callback
+	m_renderer->onSymbolEntered = [this](const std::string& symbol) {
+		requestChart(symbol);
+	};
 
 }
 

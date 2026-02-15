@@ -24,22 +24,28 @@ using json = nlohmann::json;
 #include <unordered_map>
 #include <string>
 
-struct CandleData; // Forward declaration
+// Forward declarations
+struct CandleData;
+struct ScannerResult;
 
 struct CandleVertex {
     float x, y;
     float r, g, b;
 };
 struct ChartView {
-    GLuint fbo = 0;
+	GLuint fbo = 0;
 	GLuint shaderProgram = 0;
 	GLuint vao = 0;
-    GLuint numCandles;
-    GLuint colorTex = 0;
-    int width = 0;
-    int height = 0;
+	GLuint numCandles;
+	GLuint colorTex = 0;
+	int width = 0;
+	int height = 0;
 	//std::string title;
-    const char* title;
+	const char* title;
+
+	// Per-chart price range (not global!)
+	float minPrice = 1e9f;
+	float maxPrice = -1e9f;
 
 	bool isVisible = true;
     
@@ -54,6 +60,8 @@ public:
     Renderer();
     ~Renderer();
     void init(GLFWwindow* window);
+    void ScannerGUI(const ScannerResult& scanResults);
+    void OverlayTickerGUI();
     int draw(class DataManager& dataManager);
     void CreateChartView(ChartView& aaplChart);
     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
@@ -79,13 +87,13 @@ private:
 
     // We use this to tell OpenGL which candle should be at the right edge
     int lastCandleIndex = 0;
-    float minPrice = 1e9, maxPrice = -1e9;
+    // Note: minPrice/maxPrice are now per-chart in ChartView struct, not global
 
 
     static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
     std::vector<float> prepareCandleData(const std::string& filename);
-    std::vector<float> prepareCandleDataFromVector(const std::vector<struct CandleData>& candles);
+    std::pair<std::vector<float>, std::pair<float, float>> prepareCandleDataFromVector(const std::vector<struct CandleData>& candles);
     std::pair<GLuint, int> initCandleData(std::string jsonFile);
     std::pair<GLuint, int> initCandleDataFromVector(const std::vector<float>& candleVertices);
     unsigned int createShaderProgram();

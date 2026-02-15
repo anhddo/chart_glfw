@@ -73,17 +73,19 @@ std::vector<float> Renderer::prepareCandleData(const std::string& filename) {
 }
 
 // New function: Prepare candle data from CandleData vector (from DataManager)
-std::vector<float> Renderer::prepareCandleDataFromVector(const std::vector<CandleData>& candles) {
-    if (candles.empty()) return {};
+// Returns both vertex data AND price range as a pair
+std::pair<std::vector<float>, std::pair<float, float>> Renderer::prepareCandleDataFromVector(const std::vector<CandleData>& candles) {
+    if (candles.empty()) return {{}, {1e9f, -1e9f}};
 
     std::vector<float> wickData;
     std::vector<float> bodyData;
 
-    // Calculate price range
-    minPrice = 1e9; maxPrice = -1e9;
+    // Calculate price range (local variables, not global!)
+    float localMinPrice = 1e9f;
+    float localMaxPrice = -1e9f;
     for (const auto& candle : candles) {
-        minPrice = (std::min)(minPrice, (float)candle.low);
-        maxPrice = (std::max)(maxPrice, (float)candle.high);
+        localMinPrice = (std::min)(localMinPrice, (float)candle.low);
+        localMaxPrice = (std::max)(localMaxPrice, (float)candle.high);
     }
 
     int i = 0;
@@ -114,7 +116,7 @@ std::vector<float> Renderer::prepareCandleDataFromVector(const std::vector<Candl
 
     std::vector<float> totalData = wickData;
     totalData.insert(totalData.end(), bodyData.begin(), bodyData.end());
-    return totalData;
+    return {totalData, {localMinPrice, localMaxPrice}};
 }
 
 unsigned int Renderer::createShaderProgram() {
@@ -228,8 +230,8 @@ void Renderer::renderChartToFBO(ChartView& chart, GLuint shaderProgram, GLuint V
     float leftEdge = rightEdge - zoomLevel;
 
     // Projection: [Left, Right, Bottom, Top]
-    // Notice how rightEdge is constant, only leftEdge moves!
-    glm::mat4 projection = glm::ortho(leftEdge, rightEdge, minPrice - 2.0f, maxPrice + 2.0f);
+    // Use THIS chart's price range, not global!
+    glm::mat4 projection = glm::ortho(leftEdge, rightEdge, chart.minPrice - 2.0f, chart.maxPrice + 2.0f);
 
     int projLoc = glGetUniformLocation(shaderProgram, "projection");
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
@@ -321,29 +323,66 @@ void ScannerUI() {
 
 #include "DataManager.h"
 
-int Renderer::draw(DataManager& dataManager)
+void Renderer::ScannerGUI(const ScannerResult& scanResults)
 {
-    // --- Start ImGui frame ---
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+    ImGui::Begin("Market Scanner Results");
 
-    // --- ImGui UI ---
-    //ImGui::Begin("Controls"); 
-    //ImGui::Text("Use mouse scroll to zoom in/out");
-    //ImGui::End();
-//      //ImGui::ShowDemoWindow();
 
+    ImGui::Text("Request ID: %d", scanResults.reqId);
+    ImGui::Text("Total Results: %zu", scanResults.items.size());
+    ImGui::Separator();
+
+    if (ImGui::BeginTable("ScannerTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
+        // Setup columns
+        ImGui::TableSetupColumn("Rank", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+        ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("Currency", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Contract ID", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        // Display each result
+        for (const auto& item : scanResults.items) {
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%d", item.rank);
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%s", item.symbol.c_str());
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%s", item.secType.c_str());
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::Text("%s", item.currency.c_str());
+
+            ImGui::TableSetColumnIndex(4);
+            ImGui::Text("%ld", item.conId);
+        }
+
+        ImGui::EndTable();
+    }
+
+    ImGui::End();
+}
+
+void Renderer::OverlayTickerGUI()
+{
     ImGuiIO& io = ImGui::GetIO();
 
-    // Only capture if no widget has focus and no text input is active
-    if (!io.WantCaptureKeyboard || !ImGui::IsAnyItemActive()) {
+    // Global ticker capture - only skip if we're actively editing the Control Panel text input
+    // Check if Control Panel input is focused (we'll need to track this)
+    bool shouldCapture = !io.WantTextInput;  // Don't capture only when ImGui wants text input
+
+    if (shouldCapture) {
         // Listen for alphanumeric keys
         for (int key = ImGuiKey_A; key <= ImGuiKey_Z; key++) {
             if (ImGui::IsKeyPressed((ImGuiKey)key)) {
                 m_isCapturingSymbol = true;
                 char c = 'A' + (key - ImGuiKey_A);
                 m_symbolBuffer += c;
+                printf("Captured key: %c, buffer now: %s\n", c, m_symbolBuffer.c_str());
             }
         }
         for (int key = ImGuiKey_0; key <= ImGuiKey_9; key++) {
@@ -365,40 +404,61 @@ int Renderer::draw(DataManager& dataManager)
                 onSymbolEntered(m_symbolBuffer);
             }
             m_symbolBuffer.clear();
-            //m_isCapturingSymbol = false;
+            m_isCapturingSymbol = false;
         }
 
         // Escape to cancel
         if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_symbolBuffer.clear();
-            //m_isCapturingSymbol = false;
+            m_isCapturingSymbol = false;
         }
     }
 
     // Show symbol input overlay (like TC2000's ticker box)
     if (m_isCapturingSymbol && !m_symbolBuffer.empty()) {
+
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImVec2 workPos = viewport->WorkPos;
         ImVec2 workSize = viewport->WorkSize;
 
-        // Position at top-center
+        // Position at top-center - ALWAYS force position
         ImGui::SetNextWindowPos(ImVec2(workPos.x + workSize.x * 0.5f, workPos.y + 50), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
         ImGui::SetNextWindowBgAlpha(0.8f);
+        ImGui::SetNextWindowCollapsed(false, ImGuiCond_Always);  // Force not collapsed
+        ImGui::SetNextWindowFocus();  // Force focus to ensure visibility
 
         ImGuiWindowFlags windowFlags =
             ImGuiWindowFlags_NoDecoration |
             ImGuiWindowFlags_AlwaysAutoResize |
             ImGuiWindowFlags_NoSavedSettings |
             ImGuiWindowFlags_NoFocusOnAppearing |
-            ImGuiWindowFlags_NoNav;
+            ImGuiWindowFlags_NoNav |
+            ImGuiWindowFlags_NoDocking;  // Prevent docking which can hide it
 
-        ImGui::Begin("##SymbolOverlay", nullptr, windowFlags);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); // Green text
-        ImGui::SetWindowFontScale(3.0f);
-        ImGui::Text("%s", m_symbolBuffer.c_str());
-        ImGui::PopStyleColor();
+        // Use a bool to prevent ImGui from closing the window
+        bool isOpen = true;
+        if (ImGui::Begin("##SymbolOverlay", &isOpen, windowFlags)) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); // Green text
+            ImGui::SetWindowFontScale(3.0f);
+            ImGui::Text("%s", m_symbolBuffer.c_str());
+            ImGui::PopStyleColor();
+        }
         ImGui::End();
+
+        printf("Overlay rendered: buffer='%s', isCapturing=%d\n", m_symbolBuffer.c_str(), m_isCapturingSymbol);
     }
+}
+
+int Renderer::draw(DataManager& dataManager)
+{
+    // --- Start ImGui frame ---
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // *** IMPORTANT: Process overlay ticker FIRST before any other UI ***
+    // This ensures global keyboard capture works regardless of window focus
+    OverlayTickerGUI();
 
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->Pos);
@@ -415,77 +475,13 @@ int Renderer::draw(DataManager& dataManager)
     ImGui::DockSpace(ImGui::GetID("DockSpace"));
     ImGui::End();
 
-    //for (auto& chart : charts) {
-    //    CreateChartView(chart);
-    //}
-
-    //ImGui::Begin("Mini Chart");
-
-    //ImGui::InputText("Symbol", symbolInput, IM_ARRAYSIZE(symbolInput));
-    //if (ImGui::IsItemDeactivatedAfterEdit()) { // Enter pressed
-    //    requestData = true;
-    //    currentSymbol = symbolInput;
-    //}
-
-    //ImGui::SameLine();
-    //if (ImGui::Button("Load")) {
-    //    requestData = true;
-    //    currentSymbol = symbolInput;
-    //}
-
-
-
-    //ImGui::Separator();
-
-    //// Chart placeholder
-    //ImGui::Text("Symbol: %s", currentSymbol.c_str());
-    //ImGui::Text("Chart goes here...");
 
     //ScannerUI();
 
 
 	// Scanner Results Window
-	ImGui::Begin("Market Scanner Results");
-
 	const auto& scanResults = dataManager.currentScannerResult;
-
-	ImGui::Text("Request ID: %d", scanResults.reqId);
-	ImGui::Text("Total Results: %zu", scanResults.items.size());
-	ImGui::Separator();
-
-	if (ImGui::BeginTable("ScannerTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
-		// Setup columns
-		ImGui::TableSetupColumn("Rank", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-		ImGui::TableSetupColumn("Symbol", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-		ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-		ImGui::TableSetupColumn("Currency", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-		ImGui::TableSetupColumn("Contract ID", ImGuiTableColumnFlags_WidthStretch);
-		ImGui::TableHeadersRow();
-
-		// Display each result
-		for (const auto& item : scanResults.items) {
-			ImGui::TableNextRow();
-
-			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("%d", item.rank);
-
-			ImGui::TableSetColumnIndex(1);
-			ImGui::Text("%s", item.symbol.c_str());
-
-			ImGui::TableSetColumnIndex(2);
-			ImGui::Text("%s", item.secType.c_str());
-
-			ImGui::TableSetColumnIndex(3);
-			ImGui::Text("%s", item.currency.c_str());
-
-			ImGui::TableSetColumnIndex(4);
-			ImGui::Text("%ld", item.conId);
-		}
-
-		ImGui::EndTable();
-	}
-
-	ImGui::End();
+    ScannerGUI(scanResults);
 
 	// Display charts from DataManager
 	for (auto& [symbol, chartData] : dataManager.charts) {
@@ -554,8 +550,10 @@ ChartView Renderer::createChartFromData(const std::string& symbol, const std::ve
     newChart.title = symbol.c_str();
     newChart.isVisible = true;
 
-    // Prepare vertex data from candles
-    std::vector<float> vertexData = prepareCandleDataFromVector(candles);
+    // Prepare vertex data from candles and get price range
+    auto [vertexData, priceRange] = prepareCandleDataFromVector(candles);
+    newChart.minPrice = priceRange.first;
+    newChart.maxPrice = priceRange.second;
 
     // Initialize OpenGL objects
     auto [vao, numCandles] = initCandleDataFromVector(vertexData);
