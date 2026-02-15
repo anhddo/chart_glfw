@@ -26,13 +26,32 @@ const char* fragmentShaderSource = "#version 330 core\n"
 "   FragColor = vec4(ourColor, 1.0f);\n"
 "}\n\0";
 
+Renderer::Renderer() {}
+
+Renderer::~Renderer() {
+}
+
+unsigned int Renderer::createShaderProgram() {
+    unsigned int vertex = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertex, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertex);
+
+    unsigned int fragment = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragment, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragment);
+
+    unsigned int program = glCreateProgram();
+    glAttachShader(program, vertex);
+    glAttachShader(program, fragment);
+    glLinkProgram(program);
+
+    glDeleteShader(vertex);
+    glDeleteShader(fragment);
+    return program;
+}
 
 
-
-
-
-
-std::vector<float> Renderer::prepareCandleData(const std::string& filename) {
+std::vector<float> Renderer::prepareCandleDataFromJson(const std::string& filename) {
     std::ifstream f(filename);
     if (!f.is_open()) return {};
     json fullData = json::parse(f);
@@ -72,6 +91,29 @@ std::vector<float> Renderer::prepareCandleData(const std::string& filename) {
     return totalData;
 }
 
+std::pair<GLuint, int>  Renderer::initCandleDataFromJson(std::string jsonFile) {
+    std::vector<float> candleVertices = this->prepareCandleDataFromJson(jsonFile);
+    int candleCount = candleVertices.size() / (5 * 8); // 8 vertices per candle (2 wick + 6 body)
+
+    // Setup VAO/VBO
+    GLuint VAO, VBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, candleVertices.size() * sizeof(float), candleVertices.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    int numCandles = candleVertices.size() / ((2 + 6) * 5); // 8 vertices total per candle
+
+    return { VAO, candleCount };
+}
+
+
 // New function: Prepare candle data from CandleData vector (from DataManager)
 // Returns both vertex data AND price range as a pair
 std::pair<std::vector<float>, std::pair<float, float>> Renderer::prepareCandleDataFromVector(const std::vector<CandleData>& candles) {
@@ -101,7 +143,8 @@ std::pair<std::vector<float>, std::pair<float, float>> Renderer::prepareCandleDa
         float g = (c >= o) ? 1.0f : 0.0f;
 
         // Wick vertices (2 vertices per wick line)
-        wickData.insert(wickData.end(), { x, h, r, g, 0.0f, x, l, r, g, 0.0f });
+        //wickData.insert(wickData.end(), { x, h, r, g, 0.0f, x, l, r, g, 0.0f });//wick has the same color with bar
+        wickData.insert(wickData.end(), { x, h, 1.0f, 1.0f, 1.0f, x, l, 1.0f, 1.0f, 1.0f});// white wick
 
         // Body vertices (6 vertices for 2 triangles = rectangle)
         float top = (std::max)(o, c);
@@ -119,27 +162,9 @@ std::pair<std::vector<float>, std::pair<float, float>> Renderer::prepareCandleDa
     return {totalData, {localMinPrice, localMaxPrice}};
 }
 
-unsigned int Renderer::createShaderProgram() {
-    unsigned int vertex = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertex);
-
-    unsigned int fragment = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragment);
-
-    unsigned int program = glCreateProgram();
-    glAttachShader(program, vertex);
-    glAttachShader(program, fragment);
-    glLinkProgram(program);
-
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
-    return program;
-}
 
 
-void Renderer::createChartFramebuffer(ChartView& chart, int w, int h)
+void Renderer::createChartFrameBuffer(ChartView& chart, int w, int h)
 {
     chart.width = w;
     chart.height = h;
@@ -166,27 +191,6 @@ void Renderer::createChartFramebuffer(ChartView& chart, int w, int h)
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-std::pair<GLuint, int>  Renderer::initCandleData(std::string jsonFile) {
-    std::vector<float> candleVertices = this->prepareCandleData(jsonFile);
-    int candleCount = candleVertices.size() / (5 * 8); // 8 vertices per candle (2 wick + 6 body)
-
-    // Setup VAO/VBO
-    GLuint VAO, VBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, candleVertices.size() * sizeof(float), candleVertices.data(), GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    int numCandles = candleVertices.size() / ((2 + 6) * 5); // 8 vertices total per candle
-
-    return { VAO, candleCount };
-}
 
 // New function: Initialize candle data from pre-prepared vertex vector
 std::pair<GLuint, int> Renderer::initCandleDataFromVector(const std::vector<float>& candleVertices) {
@@ -344,6 +348,13 @@ void Renderer::ScannerGUI(const ScannerResult& scanResults)
         // Display each result
         for (const auto& item : scanResults.items) {
             ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+
+            if (ImGui::IsItemHovered()) {
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                    ImGui::GetColorU32(ImVec4(0.3f, 0.3f, 0.4f, 0.5f)));
+            }
+           
 
             ImGui::TableSetColumnIndex(0);
             ImGui::Text("%d", item.rank);
@@ -449,6 +460,23 @@ void Renderer::OverlayTickerGUI()
     }
 }
 
+void Renderer::DrawChartGUI(DataManager& dataManager)
+{
+    // Display charts from DataManager
+    for (auto& [symbol, chartData] : dataManager.charts) {
+        // Create chart if it doesn't exist
+        if (m_chartViews.find(symbol) == m_chartViews.end()) {
+            m_chartViews[symbol] = createChartFromData(symbol, chartData.candles);
+        }
+
+
+        // Only display if visible
+        if (m_chartViews[symbol].isVisible) {
+            CreateChartView(m_chartViews[symbol]);
+        }
+    }
+}
+
 int Renderer::draw(DataManager& dataManager)
 {
     // --- Start ImGui frame ---
@@ -483,52 +511,9 @@ int Renderer::draw(DataManager& dataManager)
 	const auto& scanResults = dataManager.currentScannerResult;
     ScannerGUI(scanResults);
 
-	// Display charts from DataManager
-	for (auto& [symbol, chartData] : dataManager.charts) {
-		// Create chart if it doesn't exist
-		if (m_chartViews.find(symbol) == m_chartViews.end()) {
-			m_chartViews[symbol] = createChartFromData(symbol, chartData.candles);
-		}
-
-		// Display the chart window
-		CreateChartView(m_chartViews[symbol]);
-	}
+    DrawChartGUI(dataManager);
 
 
-
-	// 2. Create the UI Window and Button
-	ImGui::Begin("Control Panel");
-
-	// TC2000-style symbol input
-	static char symbolBuffer[32] = "";
-	ImGui::Text("Enter Symbol:");
-	ImGui::SameLine();
-
-	// Input text with enter detection
-	if (ImGui::InputText("##symbol", symbolBuffer, IM_ARRAYSIZE(symbolBuffer), 
-						 ImGuiInputTextFlags_EnterReturnsTrue)) {
-		// User pressed Enter!
-		if (strlen(symbolBuffer) > 0 && onSymbolEntered) {
-			std::string symbol = symbolBuffer;
-			// Convert to uppercase
-			std::transform(symbol.begin(), symbol.end(), symbol.begin(), ::toupper);
-			onSymbolEntered(symbol);
-
-			// Clear input
-			symbolBuffer[0] = '\0';
-		}
-	}
-
-	// Keep focus on input for quick typing
-	if (ImGui::IsWindowAppearing()) {
-		ImGui::SetKeyboardFocusHere(-1);
-	}
-
-	if (ImGui::Button("Click Me!")) {
-		std::cout << "Button was clicked!" << std::endl;
-	}
-
-	ImGui::End();
 
 
 
@@ -562,7 +547,7 @@ ChartView Renderer::createChartFromData(const std::string& symbol, const std::ve
     newChart.shaderProgram = createShaderProgram();
 
     // Create initial FBO (will be resized in CreateChartView if needed)
-    createChartFramebuffer(newChart, 800, 600);
+    createChartFrameBuffer(newChart, 800, 600);
 
     return newChart;
 }
@@ -579,7 +564,7 @@ void Renderer::CreateChartView(ChartView& chart)
         {
             glDeleteTextures(1, &chart.colorTex);
             glDeleteFramebuffers(1, &chart.fbo);
-            createChartFramebuffer(chart, (int)avail.x, (int)avail.y);
+            createChartFrameBuffer(chart, (int)avail.x, (int)avail.y);
         }
 
         renderChartToFBO(chart, chart.shaderProgram, chart.vao, chart.numCandles);
@@ -618,9 +603,5 @@ void Renderer::init(GLFWwindow* window) {
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
-}
-Renderer::Renderer(){}
-
-Renderer::~Renderer() {
 }
 
