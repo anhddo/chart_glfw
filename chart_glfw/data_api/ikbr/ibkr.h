@@ -153,6 +153,8 @@ private:
 	std::queue<Command> m_commandQueue;
 	std::queue<Event> m_eventQueue;
 	std::unordered_map<int, std::vector<ScannerResultItem>> m_pendingScannerResults;
+	std::unordered_map<int, std::vector<CandleData>> m_pendingHistoricalData;
+	std::unordered_map<int, std::string> m_reqIdToSymbol;
 
 	void saveScannerXML(const std::string& xml);
 	void historicalDataRequests();

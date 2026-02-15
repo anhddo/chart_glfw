@@ -241,7 +241,25 @@ void IbkrClient::processCommands() {
 				printf("Processing CancelScannerCommand: reqId=%d\n", arg.reqId);
 				m_pClient->cancelScannerSubscription(arg.reqId);
 			}
-			
+			else if constexpr (std::is_same_v<T, RequestHistoricalDataCommand>) {
+				printf("Processing RequestHistoricalDataCommand: reqId=%d, symbol=%s, duration=%s, barSize=%s\n",
+					arg.reqId, arg.symbol.c_str(), arg.durationStr.c_str(), arg.barSizeSetting.c_str());
+
+				// Store symbol for this reqId so we can include it in the event
+				m_reqIdToSymbol[arg.reqId] = arg.symbol;
+
+				Contract contract;
+				contract.symbol = arg.symbol;
+				contract.secType = "STK";
+				contract.currency = "USD";
+				contract.exchange = "SMART";
+
+				// formatDate: 1 = yyyyMMdd HH:mm:ss, 2 = system time format in seconds
+				// keepUpToDate: false = one-time historical data request
+				m_pClient->reqHistoricalData(arg.reqId, contract, arg.endDateTime,
+					arg.durationStr, arg.barSizeSetting, arg.whatToShow,
+					arg.useRTH, 1, false, TagValueListSPtr());
+			}
 			}, cmd.data);
 	}
 }
@@ -2385,15 +2403,67 @@ void IbkrClient::receiveFA(faDataType pFaDataType, const std::string& cxml) {
 
 //! [historicaldata]
 void IbkrClient::historicalData(TickerId reqId, const Bar& bar) {
-	printf("HistoricalData. ReqId: %ld - Date: %s, Open: %s, High: %s, Low: %s, Close: %s, Volume: %s, Count: %s, WAP: %s\n", reqId, bar.time.c_str(),
-		Utils::doubleMaxString(bar.open).c_str(), Utils::doubleMaxString(bar.high).c_str(), Utils::doubleMaxString(bar.low).c_str(), Utils::doubleMaxString(bar.close).c_str(),
-		DecimalFunctions::decimalStringToDisplay(bar.volume).c_str(), Utils::intMaxString(bar.count).c_str(), DecimalFunctions::decimalStringToDisplay(bar.wap).c_str());
+	printf("HistoricalData. ReqId: %ld - Date: %s, Open: %s, High: %s, Low: %s, Close: %s, Volume: %s\n", 
+		reqId, bar.time.c_str(),
+		Utils::doubleMaxString(bar.open).c_str(), 
+		Utils::doubleMaxString(bar.high).c_str(), 
+		Utils::doubleMaxString(bar.low).c_str(), 
+		Utils::doubleMaxString(bar.close).c_str(),
+		DecimalFunctions::decimalStringToDisplay(bar.volume).c_str());
+
+	// Convert Bar to CandleData and accumulate
+	CandleData candle;
+	candle.date = bar.time;
+	candle.open = bar.open;
+	candle.high = bar.high;
+	candle.low = bar.low;
+	candle.close = bar.close;
+
+	// Convert Decimal volume to long
+	std::string volumeStr = DecimalFunctions::decimalStringToDisplay(bar.volume);
+	try {
+		candle.volume = std::stol(volumeStr);
+	} catch (...) {
+		candle.volume = 0;
+	}
+
+	m_pendingHistoricalData[reqId].push_back(candle);
 }
 //! [historicaldata]
 
 //! [historicaldataend]
 void IbkrClient::historicalDataEnd(int reqId, const std::string& startDateStr, const std::string& endDateStr) {
-	std::cout << "HistoricalDataEnd. ReqId: " << reqId << " - Start Date: " << startDateStr << ", End Date: " << endDateStr << std::endl;
+	printf("HistoricalDataEnd. ReqId: %d - Start Date: %s, End Date: %s\n", 
+		reqId, startDateStr.c_str(), endDateStr.c_str());
+
+	// Get accumulated bars
+	std::vector<CandleData> candles;
+	auto dataIt = m_pendingHistoricalData.find(reqId);
+	if (dataIt != m_pendingHistoricalData.end()) {
+		candles = std::move(dataIt->second);
+		m_pendingHistoricalData.erase(dataIt);
+	}
+
+	// Get symbol for this reqId
+	std::string symbol;
+	auto symbolIt = m_reqIdToSymbol.find(reqId);
+	if (symbolIt != m_reqIdToSymbol.end()) {
+		symbol = symbolIt->second;
+		m_reqIdToSymbol.erase(symbolIt);
+	}
+
+	// Push complete event if we have data
+	if (!candles.empty() && !symbol.empty()) {
+		printf("Pushing HistoricalDataEvent: symbol=%s, bars=%zu\n", 
+			symbol.c_str(), candles.size());
+
+		HistoricalDataEvent evt;
+		evt.reqId = reqId;
+		evt.symbol = symbol;
+		evt.candles = std::move(candles);
+
+		pushEvent(Event{ evt });
+	}
 }
 //! [historicaldataend]
 

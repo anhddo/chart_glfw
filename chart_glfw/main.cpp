@@ -49,15 +49,13 @@ int main() {
 	}
 
 	App app;
-	app.start();
+	app.init(window);
 
-	Renderer renderer;
-	renderer.init(window);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 		app.update();
-		renderer.draw(app.dataManager);
+
 		glfwSwapBuffers(window);
 	}
 

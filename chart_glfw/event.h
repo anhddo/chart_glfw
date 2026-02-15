@@ -1,6 +1,8 @@
 #pragma once
 #include <variant>
 #include <string>
+#include <vector>
+
 struct ScannerResultItem {
 	int rank;
 	std::string symbol;
@@ -27,11 +29,26 @@ struct OrderStatus
 	std::string status;
 };
 
+struct CandleData {
+	std::string date;  // Or use time_t
+	double open;
+	double high;
+	double low;
+	double close;
+	long volume;
+};
+
+struct HistoricalDataEvent {
+	int reqId;
+	std::string symbol;
+	std::vector<CandleData> candles;
+};
 
 using EventData = std::variant<
 	ScannerResult,
 	TickPrice,
-	OrderStatus
+	OrderStatus,
+	HistoricalDataEvent
 >;
 
 struct Event

@@ -1,4 +1,8 @@
 #include "renderer.h"
+#include "DataManager.h"
+#include "event.h"
+
+#include <unordered_map>
 
 
 
@@ -60,6 +64,51 @@ std::vector<float> Renderer::prepareCandleData(const std::string& filename) {
             x - w, bot, r, g, 0.0f,  x + w, bot, r, g, 0.0f,  x + w, top, r, g, 0.0f,
             x - w, bot, r, g, 0.0f,  x + w, top, r, g, 0.0f,  x - w, top, r, g, 0.0f
             });
+        i++;
+    }
+
+    std::vector<float> totalData = wickData;
+    totalData.insert(totalData.end(), bodyData.begin(), bodyData.end());
+    return totalData;
+}
+
+// New function: Prepare candle data from CandleData vector (from DataManager)
+std::vector<float> Renderer::prepareCandleDataFromVector(const std::vector<CandleData>& candles) {
+    if (candles.empty()) return {};
+
+    std::vector<float> wickData;
+    std::vector<float> bodyData;
+
+    // Calculate price range
+    minPrice = 1e9; maxPrice = -1e9;
+    for (const auto& candle : candles) {
+        minPrice = (std::min)(minPrice, (float)candle.low);
+        maxPrice = (std::max)(maxPrice, (float)candle.high);
+    }
+
+    int i = 0;
+    for (const auto& candle : candles) {
+        float o = (float)candle.open;
+        float h = (float)candle.high;
+        float l = (float)candle.low;
+        float c = (float)candle.close;
+        float x = (float)i;
+
+        // Color: green if close >= open, red otherwise
+        float r = (c >= o) ? 0.0f : 1.0f;
+        float g = (c >= o) ? 1.0f : 0.0f;
+
+        // Wick vertices (2 vertices per wick line)
+        wickData.insert(wickData.end(), { x, h, r, g, 0.0f, x, l, r, g, 0.0f });
+
+        // Body vertices (6 vertices for 2 triangles = rectangle)
+        float top = (std::max)(o, c);
+        float bot = (std::min)(o, c);
+        float w = 0.3f; // body width
+        bodyData.insert(bodyData.end(), {
+            x - w, bot, r, g, 0.0f,  x + w, bot, r, g, 0.0f,  x + w, top, r, g, 0.0f,
+            x - w, bot, r, g, 0.0f,  x + w, top, r, g, 0.0f,  x - w, top, r, g, 0.0f
+        });
         i++;
     }
 
@@ -135,7 +184,31 @@ std::pair<GLuint, int>  Renderer::initCandleData(std::string jsonFile) {
     int numCandles = candleVertices.size() / ((2 + 6) * 5); // 8 vertices total per candle
 
     return { VAO, candleCount };
+}
 
+// New function: Initialize candle data from pre-prepared vertex vector
+std::pair<GLuint, int> Renderer::initCandleDataFromVector(const std::vector<float>& candleVertices) {
+    if (candleVertices.empty()) return { 0, 0 };
+
+    // Setup VAO/VBO
+    GLuint VAO, VBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, candleVertices.size() * sizeof(float), candleVertices.data(), GL_STATIC_DRAW);
+
+    // Position attribute (2 floats: x, y)
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Color attribute (3 floats: r, g, b)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    int numCandles = candleVertices.size() / ((2 + 6) * 5); // 8 vertices total per candle (2 wick + 6 body)
+
+    return { VAO, numCandles };
 }
 
 void Renderer::renderChartToFBO(ChartView& chart, GLuint shaderProgram, GLuint VAO, int numCandles)
@@ -261,6 +334,72 @@ int Renderer::draw(DataManager& dataManager)
     //ImGui::End();
 //      //ImGui::ShowDemoWindow();
 
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Only capture if no widget has focus and no text input is active
+    if (!io.WantCaptureKeyboard || !ImGui::IsAnyItemActive()) {
+        // Listen for alphanumeric keys
+        for (int key = ImGuiKey_A; key <= ImGuiKey_Z; key++) {
+            if (ImGui::IsKeyPressed((ImGuiKey)key)) {
+                m_isCapturingSymbol = true;
+                char c = 'A' + (key - ImGuiKey_A);
+                m_symbolBuffer += c;
+            }
+        }
+        for (int key = ImGuiKey_0; key <= ImGuiKey_9; key++) {
+            if (ImGui::IsKeyPressed((ImGuiKey)key)) {
+                m_isCapturingSymbol = true;
+                char c = '0' + (key - ImGuiKey_0);
+                m_symbolBuffer += c;
+            }
+        }
+
+        // Backspace to delete
+        if (ImGui::IsKeyPressed(ImGuiKey_Backspace) && !m_symbolBuffer.empty()) {
+            m_symbolBuffer.pop_back();
+        }
+
+        // Enter to submit
+        if (ImGui::IsKeyPressed(ImGuiKey_Enter) && !m_symbolBuffer.empty()) {
+            if (onSymbolEntered) {
+                onSymbolEntered(m_symbolBuffer);
+            }
+            m_symbolBuffer.clear();
+            //m_isCapturingSymbol = false;
+        }
+
+        // Escape to cancel
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            m_symbolBuffer.clear();
+            //m_isCapturingSymbol = false;
+        }
+    }
+
+    // Show symbol input overlay (like TC2000's ticker box)
+    if (m_isCapturingSymbol && !m_symbolBuffer.empty()) {
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImVec2 workPos = viewport->WorkPos;
+        ImVec2 workSize = viewport->WorkSize;
+
+        // Position at top-center
+        ImGui::SetNextWindowPos(ImVec2(workPos.x + workSize.x * 0.5f, workPos.y + 50), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowBgAlpha(0.8f);
+
+        ImGuiWindowFlags windowFlags =
+            ImGuiWindowFlags_NoDecoration |
+            ImGuiWindowFlags_AlwaysAutoResize |
+            ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoFocusOnAppearing |
+            ImGuiWindowFlags_NoNav;
+
+        ImGui::Begin("##SymbolOverlay", nullptr, windowFlags);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); // Green text
+        ImGui::SetWindowFontScale(3.0f);
+        ImGui::Text("%s", m_symbolBuffer.c_str());
+        ImGui::PopStyleColor();
+        ImGui::End();
+    }
+
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->Pos);
     ImGui::SetNextWindowSize(vp->Size);
@@ -348,11 +487,48 @@ int Renderer::draw(DataManager& dataManager)
 
 	ImGui::End();
 
+	// Display charts from DataManager
+	for (auto& [symbol, chartData] : dataManager.charts) {
+		// Create chart if it doesn't exist
+		if (m_chartViews.find(symbol) == m_chartViews.end()) {
+			m_chartViews[symbol] = createChartFromData(symbol, chartData.candles);
+		}
+
+		// Display the chart window
+		CreateChartView(m_chartViews[symbol]);
+	}
+
+
+
 	// 2. Create the UI Window and Button
-	ImGui::Begin("Control Panel"); // Create a window called "Control Panel"
+	ImGui::Begin("Control Panel");
+
+	// TC2000-style symbol input
+	static char symbolBuffer[32] = "";
+	ImGui::Text("Enter Symbol:");
+	ImGui::SameLine();
+
+	// Input text with enter detection
+	if (ImGui::InputText("##symbol", symbolBuffer, IM_ARRAYSIZE(symbolBuffer), 
+						 ImGuiInputTextFlags_EnterReturnsTrue)) {
+		// User pressed Enter!
+		if (strlen(symbolBuffer) > 0 && onSymbolEntered) {
+			std::string symbol = symbolBuffer;
+			// Convert to uppercase
+			std::transform(symbol.begin(), symbol.end(), symbol.begin(), ::toupper);
+			onSymbolEntered(symbol);
+
+			// Clear input
+			symbolBuffer[0] = '\0';
+		}
+	}
+
+	// Keep focus on input for quick typing
+	if (ImGui::IsWindowAppearing()) {
+		ImGui::SetKeyboardFocusHere(-1);
+	}
 
 	if (ImGui::Button("Click Me!")) {
-		// This code runs ONLY when the button is pressed
 		std::cout << "Button was clicked!" << std::endl;
 	}
 
@@ -368,6 +544,29 @@ int Renderer::draw(DataManager& dataManager)
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     return 0;
+}
+
+ChartView Renderer::createChartFromData(const std::string& symbol, const std::vector<CandleData>& candles) {
+    printf("Creating new chart view for symbol: %s with %zu candles\n", 
+           symbol.c_str(), candles.size());
+
+    ChartView newChart;
+    newChart.title = symbol.c_str();
+    newChart.isVisible = true;
+
+    // Prepare vertex data from candles
+    std::vector<float> vertexData = prepareCandleDataFromVector(candles);
+
+    // Initialize OpenGL objects
+    auto [vao, numCandles] = initCandleDataFromVector(vertexData);
+    newChart.vao = vao;
+    newChart.numCandles = numCandles;
+    newChart.shaderProgram = createShaderProgram();
+
+    // Create initial FBO (will be resized in CreateChartView if needed)
+    createChartFramebuffer(newChart, 800, 600);
+
+    return newChart;
 }
 
 void Renderer::CreateChartView(ChartView& chart)

@@ -20,6 +20,11 @@ using json = nlohmann::json;
 
 #include <algorithm>
 #include <vector>
+#include <functional>
+#include <unordered_map>
+#include <string>
+
+struct CandleData; // Forward declaration
 
 struct CandleVertex {
     float x, y;
@@ -53,10 +58,18 @@ public:
     void CreateChartView(ChartView& aaplChart);
     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
+    // Callback for symbol input
+    std::function<void(const std::string&)> onSymbolEntered;
 
 private:
+    // TC2000-style global symbol capture
+    std::string m_symbolBuffer;
+    bool m_isCapturingSymbol = false;
     GLuint VAO, VBO;
     std::vector<CandleVertex> vertices;
+
+    // Chart management
+    std::unordered_map<std::string, ChartView> m_chartViews;
 
 
     // 2. Zooming Variables
@@ -72,12 +85,15 @@ private:
     static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
     std::vector<float> prepareCandleData(const std::string& filename);
-    std::pair<GLuint, int>  initCandleData(std::string jsonFile);
+    std::vector<float> prepareCandleDataFromVector(const std::vector<struct CandleData>& candles);
+    std::pair<GLuint, int> initCandleData(std::string jsonFile);
+    std::pair<GLuint, int> initCandleDataFromVector(const std::vector<float>& candleVertices);
     unsigned int createShaderProgram();
 
     void onScroll(double xoffset, double yoffset);
     void createChartFramebuffer(ChartView& chart, int w, int h);
     void renderChartToFBO(ChartView& chart, GLuint shaderProgram, GLuint VAO, int numCandles);
+    ChartView createChartFromData(const std::string& symbol, const std::vector<struct CandleData>& candles);
 
 
     // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
