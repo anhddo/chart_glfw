@@ -78,7 +78,11 @@ public:
     void DrawChartGUI(DataManager& dataManager);
     void DockSetting();
     void TabTest(DataManager& dataManager);
+    void newGUI(DataManager& dataManager);
+    void RenderTradingWindows(DataManager& dataManager);
+    void RenderAnalysisWindows(DataManager& dataManager);
     int draw(class DataManager& dataManager);
+    void oldGUI(DataManager& dataManager);
     void CreateChartView(ChartView& aaplChart);
     static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 

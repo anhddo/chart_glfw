@@ -543,12 +543,125 @@ void Renderer::TabTest(DataManager& dataManager)
     ImGui::End();
 }
 
+void Renderer::RenderTradingWindows(DataManager& dataManager)
+{
+	// Chart Window - display active symbol
+	std::string symbol = dataManager.activeSymbol;
+	if (!symbol.empty() && dataManager.charts.find(symbol) != dataManager.charts.end()) {
+		if (m_chartViews.find(symbol) == m_chartViews.end()) {
+			m_chartViews[symbol] = createChartFromData(symbol, dataManager.charts[symbol].candles);
+		}
+		if (m_chartViews[symbol].isVisible) {
+			CreateChartView(m_chartViews[symbol]);
+		}
+	}
+
+	// Order Entry Window
+	static int quantity = 100;
+	static char orderSymbol[64] = "";
+	ImGui::Begin("Order Entry##Trading");
+	ImGui::Text("Quick Trade");
+	ImGui::InputText("Symbol", orderSymbol, 64);
+	ImGui::InputInt("Quantity", &quantity);
+	if (ImGui::Button("Buy")) { /* TODO: Implement order */ }
+	ImGui::SameLine();
+	if (ImGui::Button("Sell")) { /* TODO: Implement order */ }
+	ImGui::End();
+
+	// Market Depth Window
+	ImGui::Begin("Market Depth##Trading");
+	ImGui::Text("Market depth data will be displayed here");
+	// TODO: Display market depth from dataManager
+	ImGui::End();
+}
+void Renderer::RenderAnalysisWindows(DataManager& dataManager)
+{
+    // Scanner Results
+    ScannerGUI(dataManager.currentScannerResult);
+
+    // Technical Indicators Window
+    ImGui::Begin("Technical Indicators##Analysis");
+    ImGui::Text("Technical analysis tools");
+    // TODO: RSI, MACD, etc.
+    ImGui::End();
+
+    // Backtest Results Window
+    ImGui::Begin("Backtest Results##Analysis");
+    ImGui::Text("Backtest statistics");
+    // TODO: Backtest stats
+    ImGui::End();
+
+    // Strategy Editor Window
+    ImGui::Begin("Strategy Editor##Analysis");
+    ImGui::Text("Strategy development");
+    // TODO: Code editor for strategies
+    ImGui::End();
+}
+void Renderer::newGUI(DataManager& dataManager) {
+	// Main window covering entire viewport
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(viewport->Pos);
+	ImGui::SetNextWindowSize(viewport->Size);
+	ImGui::SetNextWindowViewport(viewport->ID);
+
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+									ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+									ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+									ImGuiWindowFlags_NoNavFocus;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::Begin("MainDockSpaceWindow", nullptr, window_flags);
+	ImGui::PopStyleVar();
+
+	// Excel-like sheet tabs
+	if (ImGui::BeginTabBar("WorkbookTabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_AutoSelectNewTabs))
+	{
+		// Sheet 1: Trading View
+		if (ImGui::BeginTabItem("Trading"))
+		{
+			ImGuiID dockspace_id = ImGui::GetID("TradingDockSpace");
+			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+			RenderTradingWindows(dataManager);
+			ImGui::EndTabItem();
+		}
+
+		// Sheet 2: Analysis View
+		if (ImGui::BeginTabItem("Analysis"))
+		{
+			ImGuiID dockspace_id = ImGui::GetID("AnalysisDockSpace");
+			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+			RenderAnalysisWindows(dataManager);
+			ImGui::EndTabItem();
+		}
+
+		// Add new sheet button (optional)
+		if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip))
+		{
+			// TODO: Add logic to create new sheet
+		}
+
+		ImGui::EndTabBar();
+	}
+
+	ImGui::End();
+}
+
 int Renderer::draw(DataManager& dataManager)
 {
-    // --- Start ImGui frame ---
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+	// --- Start ImGui frame ---
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	newGUI(dataManager);
+
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	return 0;
+}
+
+void Renderer::oldGUI(DataManager& dataManager)
+{
 
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->Pos);
@@ -564,34 +677,20 @@ int Renderer::draw(DataManager& dataManager)
 
 
 
-	//// Scanner Results Window
-	const auto& scanResults = dataManager.currentScannerResult;
-	ScannerGUI(scanResults);
+    //// Scanner Results Window
+    const auto& scanResults = dataManager.currentScannerResult;
+    ScannerGUI(scanResults);
 
-	//DrawChartGUI(dataManager);
-	std::string symbol = dataManager.activeSymbol;
-	if (dataManager.charts.find(symbol) != dataManager.charts.end()) {
-		// Check if chart exists
-		if (m_chartViews.find(symbol) == m_chartViews.end()) {
-			// Create new chart if it doesn't exist
-			m_chartViews[symbol] = createChartFromData(symbol, dataManager.charts[symbol].candles);
-		} 
-		CreateChartView(m_chartViews[symbol]);
-	}
-
-
-
-
-
-
-    ImGui::Render();
-
-
-
-    // --- Render ImGui LAST ---
-
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    return 0;
+    //DrawChartGUI(dataManager);
+    std::string symbol = dataManager.activeSymbol;
+    if (dataManager.charts.find(symbol) != dataManager.charts.end()) {
+        // Check if chart exists
+        if (m_chartViews.find(symbol) == m_chartViews.end()) {
+            // Create new chart if it doesn't exist
+            m_chartViews[symbol] = createChartFromData(symbol, dataManager.charts[symbol].candles);
+        }
+        CreateChartView(m_chartViews[symbol]);
+    }
 }
 
 ChartView Renderer::createChartFromData(const std::string& symbol, const std::vector<CandleData>& candles) {
