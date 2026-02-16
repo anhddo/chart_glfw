@@ -35,6 +35,12 @@ Renderer::~Renderer() {
     m_chartViews.clear();
 }
 
+void Renderer::DisableTitleFocusColors() {
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.Colors[ImGuiCol_TitleBgActive] = style.Colors[ImGuiCol_TitleBg];
+    style.Colors[ImGuiCol_TitleBgCollapsed] = style.Colors[ImGuiCol_TitleBg];
+}
+
 unsigned int Renderer::createShaderProgram() {
     unsigned int vertex = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex, 1, &vertexShaderSource, NULL);
@@ -335,7 +341,7 @@ void Renderer::ScannerGUI(const ScannerResult& scanResults)
 {
     ImGui::Begin("Market Scanner Results");
 
-
+    DisableTitleFocusColors();
     ImGui::Text("Request ID: %d", scanResults.reqId);
     ImGui::Text("Total Results: %zu", scanResults.items.size());
     ImGui::Separator();
@@ -614,12 +620,10 @@ ChartView Renderer::createChartFromData(const std::string& symbol, const std::ve
     return newChart;
 }
 
-
-
 void Renderer::CreateChartView(ChartView& chart)
 {
     ImGui::Begin(chart.title, &chart.isVisible);
-
+    DisableTitleFocusColors();
     ImVec2 avail = ImGui::GetContentRegionAvail();
     
     if (avail.x > 0 && avail.y > 0)
@@ -658,6 +662,7 @@ void Renderer::framebuffer_size_callback(GLFWwindow* window, int width, int heig
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
+
 void Renderer::init(GLFWwindow* window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

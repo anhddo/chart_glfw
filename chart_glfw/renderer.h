@@ -118,6 +118,8 @@ private:
     void onScroll(double xoffset, double yoffset);
     void createChartFrameBuffer(ChartView& chart, int w, int h);
     void renderChartToFBO(ChartView& chart, GLuint shaderProgram, GLuint VAO, int numCandles);
+
+    void DisableTitleFocusColors();
     ChartView createChartFromData(const std::string& symbol, const std::vector<struct CandleData>& candles);
 
 
