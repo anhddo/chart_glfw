@@ -1,7 +1,7 @@
 file(GLOB SOURCES "*.cpp")
 file(GLOB HEADERS "*.h")
 set(twsapi_VERSION 9.79.02)
-add_library(twsapi SHARED ${SOURCES})
+add_library(twsapi STATIC ${SOURCES})
 # On Windows (including MinGW), link against Winsock 2
 if( WIN32 )
     target_link_libraries( twsapi

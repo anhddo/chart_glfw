@@ -25,6 +25,7 @@ cmake_install.cmake
 Makefile
 *.cmake
 compile_commands.json
+CMakeUserPresets.json
 
 # =========================
 # Visual Studio

@@ -7,7 +7,6 @@
 #include <windows.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <cpr/cpr.h>
 
 #include <fstream>
 #include <iomanip>

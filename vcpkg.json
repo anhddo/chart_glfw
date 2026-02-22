@@ -1,0 +1,10 @@
+{
+  "name": "chart-glfw",
+  "version": "1.0.0",
+  "dependencies": [
+    "nlohmann-json",
+    "cpr",
+    "glm",
+    "protobuf"
+  ]
+}
