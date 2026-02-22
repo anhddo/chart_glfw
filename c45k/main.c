@@ -65,7 +65,7 @@ int scan(void) {
 const unsigned int SCR_WIDTH = 2560;
 const unsigned int SCR_HEIGHT = 1280;
 int main(void) {
-
+	scan();
 
 
 	// Setup Platform/Renderer backends
