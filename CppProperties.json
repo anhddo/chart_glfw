@@ -13,9 +13,13 @@
         "WIN32",
         "_DEBUG",
         "UNICODE",
-        "_UNICODE"
+        "_UNICODE",
+        "_MSVC_LANG=202002L"
       ],
-      "intelliSenseMode": "windows-msvc-x64"
+      "intelliSenseMode": "windows-msvc-x64",
+      "cppStandard": "c++20",
+      "cStandard": "c17",
+      "compilerSwitches": "/Zc:__cplusplus /std:c++20"
     }
   ]
 }

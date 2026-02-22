@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 
+
 struct ScannerResultItem {
 	int rank;
 	std::string symbol;

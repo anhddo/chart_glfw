@@ -1,5 +1,11 @@
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Fix MSVC __cplusplus macro to report correct C++ standard
+if(MSVC)
+    add_compile_options(/Zc:__cplusplus /std:c++20)
+endif()
+
 set(TWS_SAMPLES_DIR ${CMAKE_SOURCE_DIR}/third_party/tws_api/samples/Cpp/TestCppClient)
 
 add_library(twsadapter SHARED

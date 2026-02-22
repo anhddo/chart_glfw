@@ -1,9 +1,10 @@
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 find_package(glm CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(cpp45k
     main.cpp
@@ -16,6 +17,8 @@ add_executable(cpp45k
     data_api/polygon_io.cpp
     data_api/polygon_io.h
 )
+
+
 
 target_include_directories(cpp45k
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}

@@ -1,9 +1,15 @@
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 cmake_minimum_required(VERSION 3.15)
 project(terminal VERSION 1.0 LANGUAGES C CXX)
 
+# Fix MSVC __cplusplus macro and explicitly set C++20 standard
+if(MSVC)
+    add_compile_options(/Zc:__cplusplus /std:c++20)
+endif()
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 
 find_package(protobuf CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
