@@ -14,6 +14,7 @@ add_library(twsadapter SHARED
     ibkr.h
     ibkr_c_api.h
     command.h
+    event.h
 )
 set_target_properties(twsadapter PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
@@ -22,7 +23,6 @@ target_include_directories(twsadapter
     PUBLIC  ${CMAKE_SOURCE_DIR}/third_party/ibkr_api/client
     PRIVATE ${TWS_SAMPLES_DIR}
     PRIVATE ${CMAKE_SOURCE_DIR}/third_party/ibkr_api
-    PRIVATE ${CMAKE_SOURCE_DIR}/chart_glfw
 )
 
 target_link_libraries(twsadapter PUBLIC twsapi ibkr_proto)
