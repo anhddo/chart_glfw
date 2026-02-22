@@ -37,5 +37,5 @@ set(IMGUI_STATIC "yes" CACHE STRING "Build cimgui as a static library" FORCE)
 add_subdirectory(third_party/cimgui)
 
 add_subdirectory(TwsAdapter)
-add_subdirectory(chart_glfw)
+add_subdirectory(cpp45k)
 add_subdirectory(c45k)

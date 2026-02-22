@@ -60,7 +60,7 @@ desktop.ini
 # Sensitive configuration files
 # =========================
 config.json
-chart_glfw/config.json
+cpp45k/config.json
 
 # =========================
 # Editor junk
@@ -70,11 +70,13 @@ chart_glfw/config.json
 *.swp
 *.swo
 *.tmp
-chart_glfw/x64/Debug/chart_glfw.exe.recipe
-chart_glfw/x64/
+cpp45k/x64/Debug/chart_glfw.exe.recipe
+cpp45k/x64/
 third_party/TestCppClient/TestCppC.A2A869EF/x64/Debug/TestCppClientStatic.exe.recipe
 third_party/TestCppClient/TestCppC.A2A869EF/x64/Debug/TestCppClientStatic.pch
 third_party/TestCppClient/TestCppC.A2A869EF/
 x64/
-chart_glfw/scanner_parameters.xml
+cpp45k/scanner_parameters.xml
 third_party/tws_api/
+cmake-build-debug/.ninja_deps
+cmake-build-debug/

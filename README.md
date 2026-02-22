@@ -19,7 +19,7 @@ Real-time stock charting application that connects to the IBKR TWS API, renders 
 
 ```bash
 git clone https://github.com/anhddo/chart_glfw.git
-cd chart_glfw
+cd cpp45k
 ```
 
 ---
@@ -75,7 +75,7 @@ Create a file named `CMakeUserPresets.json` in the repo root with the following 
 The app reads connection settings from `chart_glfw/config.json`. This file is gitignored. Copy the template and fill in your details:
 
 ```bash
-cp chart_glfw/config.json.template chart_glfw/config.json
+cp cpp45k/config.json.template cpp45k/config.json
 ```
 
 Edit `config.json`:

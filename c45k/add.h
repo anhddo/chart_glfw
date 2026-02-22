@@ -1,1 +1,0 @@
-__declspec(dllexport) int Add(int a, int b);
