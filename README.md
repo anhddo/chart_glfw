@@ -113,8 +113,8 @@ Make sure TWS or IB Gateway is running and **API connections are enabled** befor
 
 | Library | Source |
 |---|---|
-| [GLFW](https://www.glfw.org/) | `third_party/glfw` |
-| [ImGui](https://github.com/ocornut/imgui) | `third_party/imgui` |
+| [GLFW](https://www.glfw.org/) | vcpkg |
+| [ImGui](https://github.com/ocornut/imgui) | vcpkg |
 | [GLAD](https://glad.dav1d.de/) | `third_party/glad` |
 | [IBKR TWS API](https://interactivebrokers.github.io/) | `third_party/ibkr_api` |
 | [GLM](https://github.com/g-truc/glm) | vcpkg |

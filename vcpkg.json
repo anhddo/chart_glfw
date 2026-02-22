@@ -8,6 +8,7 @@
     { "name": "glm", "version>=": "1.0.2" },
     { "name": "cjson"},
     { "name": "protobuf", "version>=": "5.29.5#3" },
+    "glfw3",
     { "name": "imgui", "features": ["glfw-binding", "opengl3-binding", "docking-experimental"] }
   ]
 }
